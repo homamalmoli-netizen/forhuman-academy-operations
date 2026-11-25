@@ -1,6 +1,6 @@
 # End-to-End-Ergebnis
 
-Ausgeführt: 2026-11-25T13:24:11.175Z · Chrome · Handy-Ansicht 390×844
+Ausgeführt: 2026-11-25T15:13:05.226Z · Chrome · Handy-Ansicht 390×844
 
 - ✅ Startseite: Sprache wählen und Demo ohne Login
 - ✅ Öffnung: eine Aufgabe pro Bildschirm, Erledigt
@@ -28,8 +28,10 @@ Ausgeführt: 2026-11-25T13:24:11.175Z · Chrome · Handy-Ansicht 390×844
 - ✅ Mitarbeiter: Stufe und Stationen in „Lernen“
 - ✅ Timer: Haltezeit starten, Ablauf → nur Entsorgen
 - ✅ Leitung: Haltezeiten nur mit Quelle
+- ✅ Wöchentliche Inventur: Erinnerung, unvollständig abgelehnt, vollständig abgeschlossen
+- ✅ Mitarbeiter: offene Pflichtschulungen werden auf der Aufgabenseite erinnert
 - ✅ Admin: Anleitung (SOP) mit Prüfstatus und Versionen
 - ✅ Produktion: nur Anmeldung, keine Demo-Buttons, keine Standardkonten
 - ✅ Offline: keine falsche Erfolgsmeldung
 
-**29 von 29 bestanden.** Screenshots: `docs/screenshots/`
+**31 von 31 bestanden.** Screenshots: `docs/screenshots/`

@@ -148,6 +148,11 @@ describe('Demo-Instanz (fiktive Daten)', () => {
     const left = await completeAll(emp, LEUNA, 'close');
     assert.equal(left, null);
     const mgr = await srv.client().as('manager_leuna');
+    // Schichtführer-Aufgaben (Türen, Abschlusskontrolle) sieht der Mitarbeiter nicht – die Leitung erledigt sie
+    const leadTasks = (await mgr.get(`/api/shift/next?branch=${LEUNA}&shift=close`)).data;
+    assert.ok(leadTasks.next && leadTasks.next.role === 'shift_lead');
+    assert.equal((await emp.post(`/api/tasks/${leadTasks.next.id}/complete`, { media_id: await emp.photo(LEUNA) })).data.error, 'shift_lead_only');
+    assert.equal(await completeAll(mgr, LEUNA, 'close'), null);
     const rep = (await mgr.get(`/api/reports/shift?branch=${LEUNA}&shift=close`)).data;
     assert.equal(rep.counts.open, 0);
     assert.ok(rep.counts.photos >= 3);

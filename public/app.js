@@ -166,14 +166,17 @@ async function viewShift() {
         <div class="actions">
           ${canSpeak() ? `<button class="act" data-action="speak" data-text="${esc(sayText)}">${icon('speak')}<span>${esc(tr('btn_speak'))}</span></button>` : ''}
           ${n.sop_id ? `<a class="act" href="#/sop/${n.sop_id}">${icon('book')}<span>${esc(tr('btn_guide'))}</span></a>` : ''}
+          ${n.link === 'inventory' ? `<a class="act" href="#/inventory">${icon('box')}<span>${esc(tr('open_inventory'))}</span></a>` : ''}
           <a class="act warn" href="#/problem/${n.id}">${icon('warn')}<span>${esc(tr('btn_problem'))}</span></a>
         </div>
         <button class="done-btn" data-action="complete" data-id="${n.id}">${icon('check')}<span>${esc(tr('btn_done'))}</span></button>
       </article>`;
   }
+  const trainings = d.open_trainings?.length ? `<section class="card banner-card">${icon('school')} <b>${esc(tr('open_trainings'))}</b>
+      <ul class="plain">${d.open_trainings.map((o) => `<li><a href="#/learn/${o.course_id}">${esc(o.title)}</a>${o.expired ? ` <small class="badge warn">${esc(tr('expired_training'))}</small>` : ''}</li>`).join('')}</ul></section>` : '';
   const blocked = d.blocked.length ? `<section class="card muted"><h3>${icon('lock')} ${esc(tr('blocked_tasks'))}</h3>
       <ul class="plain">${d.blocked.map((b) => `<li>${icon(b.icon)} ${esc(b.title)}${b.station ? ` <small>(${esc(b.station)})</small>` : ''} ${b.reason === 'course' ? `<a href="#/learn/${b.required_course_id}">${esc(tr('tab_learn'))} →</a>` : `<small class="badge warn">${esc(tr('needs_station_check'))}</small>`}</li>`).join('')}</ul></section>` : '';
-  render(__seq, `<div class="segs">${shiftBtns}</div>${progress}${body}${blocked}`);
+  render(__seq, `<div class="segs">${shiftBtns}</div>${progress}${trainings}${body}${blocked}`);
 }
 
 function photoField(purpose, label) {
@@ -236,7 +239,8 @@ async function viewLearn() {
     <h1 class="page-title">${icon('school')} ${esc(tr('courses'))}</h1>
     <div class="course-list">${list.map((c) => {
       const state = c.ok ? `<span class="badge ok">${esc(tr('qualified'))}</span>` : c.exam && c.needsPractical ? `<span class="badge warn">${esc(tr('needs_practical'))}</span>` : `<span class="badge">${esc(tr('not_started'))}</span>`;
-      return `<a class="course" href="#/learn/${c.id}">${icon(c.icon, 'big')}<div><b>${esc(c.title)}</b><small>${c.steps_done}/${c.steps} ${esc(tr('step'))} ${c.safety_critical ? '· ' + icon('shield') : ''}</small></div>${state}</a>`;
+      const st2 = c.expired ? `<span class="badge warn">${esc(tr('expired_training'))}</span>` : state;
+      return `<a class="course" href="#/learn/${c.id}">${icon(c.icon, 'big')}<div><b>${esc(c.title)}</b><small>${c.steps_done}/${c.steps} ${esc(tr('step'))} ${c.safety_critical ? '· ' + icon('shield') : ''}${c.expires_at && !c.expired ? ` · ${esc(tr('valid_until'))} ${new Date(c.expires_at).toLocaleDateString('de-DE')}` : ''}</small></div>${st2}</a>`;
     }).join('')}</div>`);
 }
 
@@ -352,6 +356,7 @@ async function viewGoods() {
   const sel = sc?.item?.id;
   const needsTemp = sc?.item?.needs_temperature;
   render(__seq, `<h1 class="page-title">${icon('scan')} ${esc(tr('tab_goods'))}</h1>
+    <a class="secondary block" href="#/inventory">${icon('box')} ${esc(tr('inventory'))}</a>
     <section class="card">
       <form data-submit="scan" class="form scan-form">
         <label>${esc(tr('scan_or_type'))}<input name="code" autocomplete="off" inputmode="text" value="${esc(sc?.raw || '')}"></label>
@@ -419,6 +424,27 @@ async function doScan(code) {
   try { scanState = await post('/api/goods/scan', { branch: S.branch, code }); route(); } catch (e) { showError(e); }
 }
 
+// --- Wöchentliche Inventur --------------------------------------------------------------
+async function viewInventory() {
+  const __seq = renderSeq;
+  let d;
+  try { d = await get(`/api/inventory?branch=${S.branch}`); } catch (e) { return render(__seq, errorBox(e)); }
+  const stateLabel = { due: tr('inventory_due'), overdue: tr('inventory_overdue'), upcoming: `${tr('inventory_upcoming')} ${new Date(d.due_date).toLocaleDateString('de-DE')}`, done: tr('inventory_done') }[d.state];
+  const done = d.state === 'done';
+  const canFinish = isShiftLead();
+  const counted = d.items.filter((i) => i.counted != null).length;
+  render(__seq, `<h1 class="page-title">${icon('box')} ${esc(tr('inventory'))}</h1>
+    <section class="card inv-head state-${d.state}"><b>${esc(d.week)}</b> <span class="badge ${d.state === 'done' ? 'ok' : d.state === 'overdue' ? 'change' : 'warn'}">${esc(stateLabel)}</span>
+      <progress max="${d.items.length}" value="${counted}"></progress><small>${counted}/${d.items.length} ${esc(tr('counted'))}</small></section>
+    <form data-submit="inventory" class="form"><table class="tbl inv"><thead><tr><th>${esc(tr('item'))}</th><th>${esc(tr('expected'))}</th><th>${esc(tr('counted'))}</th></tr></thead><tbody>
+      ${d.items.map((i) => `<tr class="${i.counted != null && i.expected != null && Math.abs(i.counted - i.expected) > 0.0001 ? 'low' : ''}"><td>${esc(i.name)}<br><small>${esc(i.unit)}</small></td><td>${i.expected ?? '–'}</td>
+        <td><input name="c${i.item_id}" type="number" inputmode="decimal" step="0.01" min="0" value="${i.counted ?? ''}" ${done ? 'disabled' : ''} aria-label="${esc(i.name)}"></td></tr>`).join('')}</tbody></table>
+      ${done ? '' : `<div class="row wrap"><button class="secondary" name="act" value="save">${esc(tr('save_draft'))}</button>${canFinish ? `<button class="primary" name="act" value="submit">${icon('check')} ${esc(tr('finish_inventory'))}</button>` : ''}</div>`}
+    </form>
+    ${isManager() ? `<form data-submit="inventory-weekday" class="form inline card"><label>Inventur-Tag<select name="weekday">${['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map((w, k) => `<option value="${k + 1}" ${k + 1 === d.weekday ? 'selected' : ''}>${w}</option>`).join('')}</select></label><button class="small primary">Speichern</button></form>` : ''}
+    <h2>${icon('history')} Verlauf</h2><ul class="plain">${d.history.map((h) => `<li>${esc(h.week)} · ${h.status === 'submitted' ? `${esc(tr('inventory_done'))} ${fmtTime(h.submitted_at)} · ${esc(h.by || '')} · ${h.diff_items} Abweichungen` : 'begonnen'}</li>`).join('') || '<li>–</li>'}</ul>`);
+}
+
 // --- Ölmanager ------------------------------------------------------------------------
 async function viewOil() {
   const __seq = renderSeq;
@@ -473,6 +499,8 @@ async function mDashboard() {
       <article class="stat ${d.open_problems ? 'bad' : ''}"><small>Offene Probleme</small><b>${d.open_problems}</b><span><a href="#/manage/problems">ansehen →</a></span></article>
       <article class="stat"><small>Fotos heute</small><b>${d.photos_today}</b><span>Nachweise</span></article>
       <article class="stat"><small>Schulung</small><b>${d.training.qualified}/${d.training.learners * d.training.courses}</b><span>Qualifikationen</span></article>
+      <article class="stat ${['overdue', 'due'].includes(d.inventory.state) ? 'bad' : ''}"><small>Inventur ${esc(d.inventory.week)}</small><b>${esc({ done: 'erledigt', due: 'heute', overdue: 'überfällig', upcoming: 'offen' }[d.inventory.state])}</b><span><a href="#/inventory">öffnen →</a> · fällig ${new Date(d.inventory.due_date).toLocaleDateString('de-DE')}</span></article>
+      <article class="stat ${d.open_trainings.length ? 'bad' : ''}"><small>Offene Pflichtschulungen</small><b>${d.open_trainings.length}</b><span><a href="#/manage/training">ansehen →</a></span></article>
       <article class="stat ${d.timers_expired ? 'bad' : ''}"><small>Timer</small><b>${d.timers_running}</b><span>${d.timers_expired} abgelaufen, nicht entsorgt</span></article>
       <article class="stat ${d.position_plans_today.length < 3 ? 'bad' : ''}"><small>Positionsplan heute</small><b>${d.position_plans_today.length}/3</b><span><a href="#/manage/positions">planen →</a></span></article>
       <article class="stat ${d.stock_below_min ? 'bad' : ''}"><small>Unter Mindestbestand</small><b>${d.stock_below_min}</b><span>${d.unknown_codes} unbekannte Codes</span></article>
@@ -586,6 +614,7 @@ async function mTemplates() {
         <button class="small" data-action="tpl-move" data-id="${tp.id}" data-dir="down" aria-label="nach unten">${icon('down')}</button>
         <button class="small ${tp.requires_photo ? 'on' : ''}" data-action="tpl-photo" data-id="${tp.id}" data-val="${tp.requires_photo ? 0 : 1}">${icon('camera')} ${tp.requires_photo ? 'Pflicht' : 'optional'}</button>
         <button class="small" data-action="tpl-active" data-id="${tp.id}" data-val="${tp.active ? 0 : 1}">${tp.active ? 'aktiv' : 'aus'}</button>
+        <button class="small ${tp.role === 'shift_lead' ? 'on' : ''}" data-action="tpl-role" data-id="${tp.id}" data-val="${tp.role === 'shift_lead' ? 'all' : 'shift_lead'}">${tp.role === 'shift_lead' ? 'Schichtführer' : 'alle'}</button>
         ${stationSel(tp)}
       </span></li>`).join('')}</ul>`).join('')}
     <h2>Neue Aufgabe</h2><form data-submit="tpl-new" class="form"><div class="grid2">
@@ -600,8 +629,11 @@ async function mTraining() {
   return `<h1>${icon('school')} Schulung & praktische Freigaben</h1>
     <table class="tbl"><thead><tr><th>Mitarbeiter</th>${d.courses.map((c) => `<th>${esc(c.title)}${c.safety_critical ? ' ' + icon('shield') : ''}</th>`).join('')}</tr></thead><tbody>
     ${d.people.map((p) => `<tr><td>${esc(p.display_name)}</td>${d.courses.map((c) => { const s = p.status[c.id];
-      return `<td>${s.ok ? '<span class="badge ok">qualifiziert</span>' : s.exam ? (s.needsPractical && isTrainer() ? `<button class="small primary" data-action="signoff" data-user="${p.id}" data-course="${c.id}">Praktisch freigeben</button>` : '<span class="badge warn">Praxis fehlt</span>') : '<span class="badge">Prüfung fehlt</span>'}</td>`; }).join('')}</tr>`).join('')}</tbody></table>
-    <p class="note">Praktische Freigabe nur durch Trainer nach dokumentierter Einweisung am Gerät. Eigene Freigabe ist gesperrt.</p>`;
+      return `<td>${s.expired ? '<span class="badge change">abgelaufen</span>' : s.ok ? '<span class="badge ok">qualifiziert</span>' : s.exam ? (s.needsPractical && isTrainer() ? `<button class="small primary" data-action="signoff" data-user="${p.id}" data-course="${c.id}">Praktisch freigeben</button>` : '<span class="badge warn">Praxis fehlt</span>') : '<span class="badge">Prüfung fehlt</span>'}</td>`; }).join('')}</tr>`).join('')}</tbody></table>
+    <p class="note">Praktische Freigabe nur durch Trainer nach dokumentierter Einweisung am Gerät. Eigene Freigabe ist gesperrt.</p>
+    ${S.me.is_admin ? `<h2>Gültigkeit & Pflicht</h2><p class="note">Nach Ablauf muss die Schulung wiederholt werden; offene Pflichtschulungen werden wöchentlich erinnert.</p>${d.courses.map((c) => `<form data-submit="course-settings" data-id="${c.id}" class="inline card"><b>${esc(c.title)}</b>
+      <label>Gültig<select name="valid_months"><option value="">unbegrenzt</option>${[6, 12, 24, 36].map((m) => `<option value="${m}" ${c.valid_months === m ? 'selected' : ''}>${m} Monate</option>`).join('')}</select></label>
+      <label class="check"><input type="checkbox" name="required" ${c.required ? 'checked' : ''}> Pflicht</label><button class="small primary">Speichern</button></form>`).join('')}` : ''}`;
 }
 
 async function mStock() {
@@ -677,6 +709,7 @@ async function route() {
     case 'learn': return b ? viewCourse(b) : viewLearn();
     case 'exam': return viewExam(b);
     case 'timer': return viewTimer();
+    case 'inventory': return viewInventory();
     case 'goods': return viewGoods();
     case 'oil': return viewOil();
     case 'problem': return viewProblem(b);
@@ -713,6 +746,7 @@ document.addEventListener('click', async (ev) => {
     if (A === 'print') return window.print();
     if (A === 'tpl-move') { await post(`/api/templates/${el.dataset.id}/move`, { dir: el.dataset.dir }); return route(); }
     if (A === 'tpl-photo') { await api('PATCH', `/api/templates/${el.dataset.id}`, { requires_photo: el.dataset.val === '1' }); return route(); }
+    if (A === 'tpl-role') { await api('PATCH', `/api/templates/${el.dataset.id}`, { role: el.dataset.val }); return route(); }
     if (A === 'tpl-active') { await api('PATCH', `/api/templates/${el.dataset.id}`, { active: el.dataset.val === '1' }); return route(); }
     if (A === 'signoff') { await post('/api/signoffs', { branch: S.branch, user_id: Number(el.dataset.user), course_id: Number(el.dataset.course) }); S.flash = { type: 'ok', text: 'Praktische Freigabe gespeichert' }; return route(); }
     if (A === 'timer-start') { await post('/api/timers', { branch: S.branch, product_id: Number(el.dataset.id), kind: el.dataset.kind }); return route(); }
@@ -813,6 +847,15 @@ document.addEventListener('submit', async (ev) => {
         S.flash = { type: 'ok', text: 'Neue Entwurfsversion gespeichert – jetzt freigeben.' }; location.hash = '#/manage/sops'; break;
       }
       case 'user-new': await post('/api/admin/users', { username: fd.username, display_name: fd.display_name, password: fd.password, memberships: [{ branch_id: Number(fd.branch_id), role: fd.role }] }); S.flash = { type: 'ok', text: tr('saved') }; break;
+      case 'inventory': {
+        const lines = Object.entries(fd).filter(([k, v]) => k.startsWith('c') && v !== '').map(([k, v]) => ({ item_id: Number(k.slice(1)), counted: v }));
+        await api('PUT', '/api/inventory/lines', { branch: S.branch, lines });
+        if (submitter?.value === 'submit') { const r = await post('/api/inventory/submit', { branch: S.branch }); S.flash = { type: 'ok', text: `Inventur ${r.week} abgeschlossen · ${r.diffs} Abweichungen gebucht` }; }
+        else S.flash = { type: 'ok', text: tr('saved') };
+        break;
+      }
+      case 'inventory-weekday': await api('PUT', '/api/inventory/settings', { branch: S.branch, weekday: Number(fd.weekday) }); S.flash = { type: 'ok', text: tr('saved') }; break;
+      case 'course-settings': await api('PATCH', `/api/courses/${form.dataset.id}`, { valid_months: fd.valid_months, required: !!fd.required }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'plan-add': {
         const sid = Number(form.dataset.station), uid = Number(fd.user_id);
         planDraft.list = planDraft.list.filter((a) => !(a.station_id === sid && a.user_id === uid));

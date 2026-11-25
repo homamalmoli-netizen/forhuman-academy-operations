@@ -3,6 +3,7 @@
 // Übersetzungen EN/AR/TR sind Entwürfe: reviewed_langs = 'de' -> App zeigt "Übersetzung nicht geprüft".
 import { tx } from './db.js';
 import { hashPassword } from './auth.js';
+import { EXTRA_COURSES } from './courses-extra.js';
 
 const L = (de, en, ar, tr) => ({ de, en, ar, tr });
 
@@ -56,14 +57,20 @@ const TEMPLATES = [
   ['close', 'routine', 'lightOff', L('Licht ausschalten', 'Switch off the lights', 'أطفئ الإضاءة', 'Işıkları kapat'),
     L('Notbeleuchtung nicht ausschalten.', 'Do not switch off emergency lights.', 'لا تطفئ إضاءة الطوارئ.', 'Acil durum ışıklarını kapatma.')],
   ['close', 'safety', 'door', L('Türen abschließen', 'Lock the doors', 'أقفل الأبواب', 'Kapıları kilitle'),
-    L('Alle Türen und Fenster prüfen.', 'Check all doors and windows.', 'تحقّق من كل الأبواب والنوافذ.', 'Tüm kapı ve pencereleri kontrol et.'), { photo: 1 }],
+    L('Alle Türen und Fenster prüfen.', 'Check all doors and windows.', 'تحقّق من كل الأبواب والنوافذ.', 'Tüm kapı ve pencereleri kontrol et.'), { photo: 1, role: 'shift_lead' }],
+  ['close', 'safety', 'shield', L('Abschlusskontrolle', 'Final check', 'الفحص النهائي', 'Son kontrol'),
+    L('Rundgang: alles sauber, Kühlung an, Geräte aus, Müll weg. Foto.', 'Walk-round: all clean, refrigeration on, equipment off, rubbish out. Photo.', 'جولة: كل شيء نظيف، التبريد يعمل، الأجهزة مطفأة، القمامة خارجًا. صورة.', 'Tur: her yer temiz, soğutma açık, cihazlar kapalı, çöp dışarıda. Fotoğraf.'), { photo: 1, role: 'shift_lead' }],
+  ['close', 'goods', 'box', L('Wöchentliche Inventur', 'Weekly stock count', 'الجرد الأسبوعي', 'Haftalık sayım'),
+    L('Alle Artikel zählen und Inventur abschließen.', 'Count all items and complete the stock count.', 'عدّ كل الأصناف وأنهِ الجرد.', 'Tüm ürünleri say ve sayımı tamamla.'), { freq: 'weekly', weekdays: '1', role: 'shift_lead', link: 'inventory' }],
+  ['run', 'goods', 'box', L('Lager: älteste Ware nach vorne (wöchentlich)', 'Storage: oldest stock to the front (weekly)', 'المخزن: الأقدم إلى الأمام (أسبوعيًا)', 'Depo: en eski mal öne (haftalık)'),
+    L('Nach MHD sortieren. Abgelaufenes melden.', 'Sort by best-before date. Report expired items.', 'رتّب حسب تاريخ الصلاحية. أبلغ عن المنتهي.', "TETT'ye göre sırala. Süresi geçeni bildir."), { freq: 'weekly', weekdays: '3' }],
   // Wöchentlich / monatlich
   ['close', 'cleaning', 'snow', L('Kühlschrank innen reinigen (wöchentlich)', 'Clean fridge inside (weekly)', 'نظّف الثلاجة من الداخل (أسبوعيًا)', 'Buzdolabı içini temizle (haftalık)'),
     L('Ware umlagern, kühl halten.', 'Move stock, keep it cold.', 'انقل البضاعة وأبقها باردة.', 'Malları taşı, soğuk tut.'), { photo: 1, freq: 'weekly', weekdays: '1' }],
   ['open', 'pest', 'bug', L('Schädlingskontrolle (wöchentlich)', 'Pest check (weekly)', 'فحص الحشرات (أسبوعيًا)', 'Haşere kontrolü (haftalık)'),
-    L('Kontrollpunkte ansehen. Nichts selbst sprühen.', 'Look at check points. Do not spray yourself.', 'افحص نقاط المراقبة. لا ترشّ بنفسك.', 'Kontrol noktalarına bak. Kendin ilaçlama.'), { photo: 1, freq: 'weekly', weekdays: '3' }],
+    L('Kontrollpunkte ansehen. Nichts selbst sprühen.', 'Look at check points. Do not spray yourself.', 'افحص نقاط المراقبة. لا ترشّ بنفسك.', 'Kontrol noktalarına bak. Kendin ilaçlama.'), { photo: 1, freq: 'weekly', weekdays: '3', role: 'shift_lead' }],
   ['open', 'maintenance', 'build', L('Geräte-Sichtprüfung (monatlich)', 'Equipment visual check (monthly)', 'فحص بصري للأجهزة (شهريًا)', 'Cihaz gözle kontrol (aylık)'),
-    L('Kabel, Dichtungen, Typenschild. Schäden melden.', 'Cables, seals, rating plate. Report damage.', 'الأسلاك والحشوات ولوحة البيانات. أبلغ عن الأضرار.', 'Kablolar, contalar, etiket. Hasarı bildir.'), { photo: 1, freq: 'monthly', monthDay: 1 }],
+    L('Kabel, Dichtungen, Typenschild. Schäden melden.', 'Cables, seals, rating plate. Report damage.', 'الأسلاك والحشوات ولوحة البيانات. أبلغ عن الأضرار.', 'Kablolar, contalar, etiket. Hasarı bildir.'), { photo: 1, freq: 'monthly', monthDay: 1, role: 'shift_lead' }],
 ];
 
 const SOPS = [
@@ -266,7 +273,7 @@ const STATIONS = [
     ['Nur Ware innerhalb der Haltezeit verwendet', 1],
     ['Sonderwünsche und Allergene der Bestellung beachtet', 1],
     ['Fläche zwischendurch gereinigt', 0]]],
-  ['theke', 'store', L('Kasse & Theke', 'Counter', 'الكاشير والكاونتر', 'Kasa ve tezgâh'), null, null, [
+  ['theke', 'store', L('Kasse & Theke', 'Counter', 'الكاشير والكاونتر', 'Kasa ve tezgâh'), null, 'C-ALLERGENS', [
     ['Gast freundlich begrüßt und angesehen', 0],
     ['Bestellung wiederholt und geprüft', 0],
     ['Fragen zu Allergenen: richtige Information geholt, nicht geraten', 1],
@@ -325,7 +332,7 @@ export function seedBase(db) {
     }
 
     const insCourse = db.prepare('INSERT OR IGNORE INTO courses (code, icon, safety_critical, pass_percent, content) VALUES (?,?,?,?,?)');
-    for (const [code, icon, crit, pass, content] of COURSES) insCourse.run(code, icon, crit, pass, JSON.stringify(content));
+    for (const [code, icon, crit, pass, content] of [...COURSES, ...EXTRA_COURSES]) insCourse.run(code, icon, crit, pass, JSON.stringify(content));
   });
   // Startvorlagen je Filiale (Manager kann sie danach ändern, sortieren, abschalten)
   for (const b of db.prepare('SELECT id FROM branches').all()) { seedStations(db, b.id); seedTemplates(db, b.id); }
@@ -339,7 +346,7 @@ export function seedTemplates(db, branchId) {
   const has = db.prepare('SELECT COUNT(*) AS n FROM task_templates WHERE branch_id = ?').get(branchId).n;
   if (has) return;
   const ins = db.prepare(`INSERT INTO task_templates (branch_id, shift, position, category, frequency, weekdays, month_day, icon, title, hint,
-    requires_photo, measure_unit, sop_id, required_course_id, station_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+    requires_photo, measure_unit, sop_id, required_course_id, station_id, role, link) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
   const pos = { open: 0, run: 0, close: 0 };
   tx(db, () => {
     for (const [shift, cat, icon, title, hint, o = {}] of TEMPLATES) {
@@ -347,7 +354,8 @@ export function seedTemplates(db, branchId) {
       ins.run(branchId, shift, pos[shift], cat, o.freq || 'daily', o.weekdays || '1234567', o.monthDay ?? null, icon,
         JSON.stringify(title), JSON.stringify(hint), o.photo ? 1 : 0, o.unit ?? null,
         o.sop ? idBy(db, 'sops', o.sop) : null, o.course ? idBy(db, 'courses', o.course) : null,
-        o.station ? db.prepare('SELECT id FROM stations WHERE branch_id = ? AND code = ?').get(branchId, o.station)?.id ?? null : null);
+        o.station ? db.prepare('SELECT id FROM stations WHERE branch_id = ? AND code = ?').get(branchId, o.station)?.id ?? null : null,
+        o.role || 'all', o.link || null);
     }
   });
 }
@@ -426,9 +434,9 @@ export function seedDemo(db) {
       if (st.branch_id === halle) certify(users.leadHalle, st.id, users.trainer);
     }
     for (const code of ['panieren', 'theke']) certify(users.empHalle, db.prepare('SELECT id FROM stations WHERE branch_id = ? AND code = ?').get(halle, code).id, users.trainer);
-    for (const uid of [users.leadHalle, users.trainer]) {
-      db.prepare("INSERT INTO exam_attempts (user_id, course_id, course_version, branch_id, lang, score, total, passed, answers) VALUES (?,?,1,?,'de',3,3,1,'[]')").run(uid, hyg, halle);
-    }
+    const pass = (uid, code, branch = halle) => db.prepare("INSERT INTO exam_attempts (user_id, course_id, course_version, branch_id, lang, score, total, passed, answers) VALUES (?,?,1,?,'de',3,3,1,'[]')").run(uid, idBy(db, 'courses', code), branch);
+    for (const uid of [users.leadHalle, users.trainer]) for (const c of ['C-HYGIENE', 'C-GOODS', 'C-CLEANING', 'C-ALLERGENS']) pass(uid, c);
+    pass(users.empHalle, 'C-GOODS');
     // Demo-Zeiten: ausdrücklich fiktiv. Echte Werte nur aus Herstellerangabe / freigegebener Rezeptur / HACCP-Plan.
     const demoTimes = { 'Hähnchenteile': [20, 900], 'Hähnchenfilet / Strips': [20, 300], 'Wings': [20, 600], 'Pommes': [7, 180], 'Burger-Filet': [15, null] };
     for (const p of db.prepare('SELECT id, name FROM products').all()) {
