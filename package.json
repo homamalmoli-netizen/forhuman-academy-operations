@@ -1,17 +1,15 @@
 {
-  "name": "forhuman-academy",
-  "version": "0.1.0",
+  "name": "forhuman-academy-operations",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
+  "description": "ForHuman Academy & Operations – eigenständige Schulungs- und Betriebs-App (ohne Kassenanbindung)",
+  "engines": { "node": ">=22.13" },
   "scripts": {
-    "dev": "vite --host",
-    "build": "vite build"
-  },
-  "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
-  },
-  "devDependencies": {
-    "vite": "^6.0.0"
+    "start": "node --no-warnings server/index.js",
+    "demo": "DEMO_MODE=1 node --no-warnings server/index.js",
+    "test": "node --no-warnings --test test/*.test.js",
+    "e2e": "node --no-warnings e2e/run.mjs",
+    "create-admin": "node --no-warnings scripts/create-admin.js"
   }
 }

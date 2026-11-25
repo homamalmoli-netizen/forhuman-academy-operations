@@ -1,0 +1,9 @@
+{
+  "name": "ForHuman Academy & Operations",
+  "short_name": "ForHuman",
+  "start_url": "/#/shift",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#b3121b",
+  "icons": [{ "src": "/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

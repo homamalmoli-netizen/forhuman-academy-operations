@@ -1,29 +1,33 @@
-# ForHuman Academy & Operations — Zielarchitektur
+# Architektur (umgesetzter Stand)
 
 ## Systemgrenzen
-Eigenständige Web-App/PWA; keine direkten Änderungen am bestehenden POS. Ein späterer POS-Datenaustausch erfolgt über versionierte, authentifizierte APIs. Filialen: Halle und Leuna, später Franchise.
+Eigenständige Web-App/PWA. **Keine Verbindung zum Kassensystem/POS**, keine Zeiterfassung. Filialen Halle und Leuna, weitere über die Admin-Oberfläche.
 
 ## Technik
-Frontend React + TypeScript (Migration des ersten JSX-Prototyps), Backend mit REST API, PostgreSQL, Objekt-Storage für Schulungsvideos und Fotos, Queue für wiederkehrende Aufgaben und Benachrichtigungen. Hosting ist vorab mit den tatsächlichen STRATO-Tarifmerkmalen abzugleichen; ggf. externer App-Server bei STRATO-Domain.
+- **Server:** Node.js (≥ 22.13) nur mit Bordmitteln: `node:http`, `node:sqlite`, `node:crypto`. Keine Fremdpakete.
+- **Datenbank:** SQLite-Datei mit Fremdschlüsseln, eindeutigen Schlüsseln, Prüfbedingungen und automatischen Migrationen (`server/db.js`).
+- **Oberfläche:** ES-Module ohne Build-Schritt (`public/`), mobile first, RTL über `dir="rtl"` und logische CSS-Eigenschaften, Service Worker nur für die App-Hülle (API wird nie zwischengespeichert).
+- **Gemeinsam:** `shared/codes.js` (Barcode/QR-Erkennung) läuft im Browser und auf dem Server.
 
 ## Sicherheitsmodell
-Rollen system_admin, operations_manager, branch_manager, trainer, employee, auditor. Alle API-Requests prüfen Session, Berechtigung und branch_id serverseitig. Nur genehmigte Trainer können SOPs freigeben, nur Filialleiter können praktische Gerätefreigaben erteilen. Passwörter sicher hashen, CSRF/Rate Limits, signierte Upload-URLs, Dateitypprüfung, Virenscan, Backups, Datenschutzkonzept.
+- Rollen: Admin (global), je Filiale `manager`, `trainer`, `employee`. Jede API-Anfrage prüft Sitzung, Rolle **und** Filiale auf dem Server.
+- Passwörter: scrypt mit Salt. Sitzung: zufälliges Token im HttpOnly/SameSite=Strict-Cookie, in der Datenbank nur als SHA-256-Hash.
+- CSRF: zusätzlicher Header `x-fh-request` für alle schreibenden Anfragen.
+- Login-Sperre nach 8 Fehlversuchen / 15 Minuten.
+- Uploads: Typ nach Dateiinhalt (JPG/PNG/WEBP, Beleg auch PDF), max. 8 MB, zufälliger Dateiname außerhalb des Web-Ordners, Auslieferung nur an Mitglieder der Filiale.
+- Audit-Protokoll per Datenbank-Trigger unveränderlich.
+- Content-Security-Policy ohne Inline-Skripte.
+- Praktische Freigabe nur durch Trainer, Selbstfreigabe durch Datenbank-Bedingung und Server ausgeschlossen.
 
-## Kerndomänen
-- identity: users, memberships, branches, roles
-- learning: courses, lessons, media_assets, quiz_questions, attempts, completions, practical_signoffs, certificates
-- operations: sop_documents, sop_versions, task_templates, task_occurrences, task_evidence
-- safety: haccp_plans, monitoring_points, measurements, deviations, corrective_actions, traceability_lots
-- inventory: items, storage_locations, stock_movements, counts, count_lines, suppliers
-- equipment: devices, inspections, maintenance_events, oil_checks
-- hygiene: cleaning_plans, cleaning_runs, chemical_register, pest_points, pest_inspections
-- governance: audit_events, attachments, notifications
+## Fachliche Regeln (bewusst streng)
+- Aufgaben werden je Tag einmal erzeugt (`UNIQUE(template_id, work_date)`).
+- Grenzwerte (HACCP, TPM) nur mit Quellenangabe; ohne Grenzwert keine automatische Freigabe.
+- Prüfung erst, wenn alle Lernschritte serverseitig bestätigt sind; Lösungen werden nie an den Browser geschickt.
+- Bestand ausschließlich über Buchungen (Wareneingang, Verderb, Inventur-Korrektur).
+- QR-Links werden nie automatisch geöffnet; nur https-Domains aus `TRUSTED_QR_HOSTS` nach Bestätigung.
+- Demo: eigene Instanz mit In-Memory-Datenbank; der Demo-Zugang existiert in Produktion nicht.
 
-## Datenintegrität
-Sicherheitskritische Messwerte und Korrekturmaßnahmen append-only erfassen; Änderungen als neue Revision dokumentieren. UTC-Zeitstempel und Europe/Berlin für Anzeige. Einheiten explizit (°C, kg, L, Stück); Grenzwerte nur aus freigegebenen HACCP-Plänen. Inventurbuchungen atomar; Bestandsänderungen ausschließlich über Bewegungen, nicht direkt per Frontend.
-
-## Medien
-Echte Videos und Fotos müssen vom ForHuman-Team erstellt oder rechtmäßig lizenziert werden. Niemals Platzhalter als echte Schulungsmedien darstellen. Ungeprüfte Geräte-SOPs bleiben Entwurf.
-
-## Umsetzung
-Phase 1 Auth, Filialen, SOPs, Aufgaben, Auditlog; Phase 2 HACCP und Reinigung; Phase 3 Inventur; Phase 4 vollständiges E-Learning; Phase 5 Geräte, Schädlingsmonitoring, Reporting, PWA/Deployment.
+## Datenmodell (Kurzfassung)
+`branches, users, memberships, sessions, media, sops, sop_versions, courses, course_progress, exam_attempts, practical_signoffs,
+task_templates, task_occurrences, task_evidence, problems, shift_approvals, notifications, items, item_codes, stock_settings,
+receipt_documents, goods_receipts, stock_movements, unknown_codes, fryers, oil_events, settings, audit_log`
