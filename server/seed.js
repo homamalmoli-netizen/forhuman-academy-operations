@@ -4,6 +4,7 @@
 import { tx } from './db.js';
 import { hashPassword } from './auth.js';
 import { EXTRA_COURSES } from './courses-extra.js';
+import { DAILY_ITEMS } from './handbook.js';
 
 const L = (de, en, ar, tr) => ({ de, en, ar, tr });
 
@@ -62,13 +63,17 @@ const TEMPLATES = [
     L('Rundgang: alles sauber, Kühlung an, Geräte aus, Müll weg. Foto.', 'Walk-round: all clean, refrigeration on, equipment off, rubbish out. Photo.', 'جولة: كل شيء نظيف، التبريد يعمل، الأجهزة مطفأة، القمامة خارجًا. صورة.', 'Tur: her yer temiz, soğutma açık, cihazlar kapalı, çöp dışarıda. Fotoğraf.'), { photo: 1, role: 'shift_lead' }],
   ['close', 'goods', 'box', L('Wöchentliche Inventur', 'Weekly stock count', 'الجرد الأسبوعي', 'Haftalık sayım'),
     L('Alle Artikel zählen und Inventur abschließen.', 'Count all items and complete the stock count.', 'عدّ كل الأصناف وأنهِ الجرد.', 'Tüm ürünleri say ve sayımı tamamla.'), { freq: 'weekly', weekdays: '1', role: 'shift_lead', link: 'inventory' }],
+  ['run', 'goods', 'box', L('Tagesinventur Frühschicht (bis 17:00)', 'Daily stock count early shift (by 17:00)', 'جرد يومي للوردية الصباحية (حتى 17:00)', 'Sabah vardiyası günlük sayım (17:00\'a kadar)'),
+    L('Liste unter Ware → Tagesinventur ausfüllen.', 'Fill in the list under Goods → Daily count.', 'املأ القائمة في البضاعة ← الجرد اليومي.', 'Mal → Günlük sayım listesini doldur.'), { action: 'daily_early' }],
+  ['close', 'goods', 'box', L('Tagesinventur Spätschicht (bis 23:00)', 'Daily stock count late shift (by 23:00)', 'جرد يومي للوردية المسائية (حتى 23:00)', 'Akşam vardiyası günlük sayım (23:00\'e kadar)'),
+    L('Liste unter Ware → Tagesinventur ausfüllen.', 'Fill in the list under Goods → Daily count.', 'املأ القائمة في البضاعة ← الجرد اليومي.', 'Mal → Günlük sayım listesini doldur.'), { action: 'daily_late' }],
   ['run', 'goods', 'box', L('Lager: älteste Ware nach vorne (wöchentlich)', 'Storage: oldest stock to the front (weekly)', 'المخزن: الأقدم إلى الأمام (أسبوعيًا)', 'Depo: en eski mal öne (haftalık)'),
     L('Nach MHD sortieren. Abgelaufenes melden.', 'Sort by best-before date. Report expired items.', 'رتّب حسب تاريخ الصلاحية. أبلغ عن المنتهي.', "TETT'ye göre sırala. Süresi geçeni bildir."), { freq: 'weekly', weekdays: '3' }],
   // Wöchentlich / monatlich
   ['close', 'cleaning', 'snow', L('Kühlschrank innen reinigen (wöchentlich)', 'Clean fridge inside (weekly)', 'نظّف الثلاجة من الداخل (أسبوعيًا)', 'Buzdolabı içini temizle (haftalık)'),
     L('Ware umlagern, kühl halten.', 'Move stock, keep it cold.', 'انقل البضاعة وأبقها باردة.', 'Malları taşı, soğuk tut.'), { photo: 1, freq: 'weekly', weekdays: '1' }],
   ['open', 'pest', 'bug', L('Schädlingskontrolle (wöchentlich)', 'Pest check (weekly)', 'فحص الحشرات (أسبوعيًا)', 'Haşere kontrolü (haftalık)'),
-    L('Kontrollpunkte ansehen. Nichts selbst sprühen.', 'Look at check points. Do not spray yourself.', 'افحص نقاط المراقبة. لا ترشّ بنفسك.', 'Kontrol noktalarına bak. Kendin ilaçlama.'), { photo: 1, freq: 'weekly', weekdays: '3', role: 'shift_lead' }],
+    L('Kontrollpunkte ansehen. Nichts selbst sprühen.', 'Look at check points. Do not spray yourself.', 'افحص نقاط المراقبة. لا ترشّ بنفسك.', 'Kontrol noktalarına bak. Kendin ilaçlama.'), { freq: 'weekly', weekdays: '3', role: 'shift_lead', action: 'pest_check' }],
   ['open', 'maintenance', 'build', L('Geräte-Sichtprüfung (monatlich)', 'Equipment visual check (monthly)', 'فحص بصري للأجهزة (شهريًا)', 'Cihaz gözle kontrol (aylık)'),
     L('Kabel, Dichtungen, Typenschild. Schäden melden.', 'Cables, seals, rating plate. Report damage.', 'الأسلاك والحشوات ولوحة البيانات. أبلغ عن الأضرار.', 'Kablolar, contalar, etiket. Hasarı bildir.'), { photo: 1, freq: 'monthly', monthDay: 1, role: 'shift_lead' }],
 ];
@@ -313,7 +318,13 @@ export function seedStations(db, branchId) {
   });
 }
 
-export function seedBase(db) {
+export function seedDailyItems(db) {
+  // Artikel der täglichen Inventurliste (Vorlage des Betreibers)
+  const insItem = db.prepare('INSERT INTO items (name, unit, category, daily_count, meat) SELECT ?,?,?,1,? WHERE NOT EXISTS (SELECT 1 FROM items WHERE name = ?)');
+  for (const [name, unit, cat, meat] of DAILY_ITEMS) insItem.run(name, unit, cat, meat, name);
+}
+
+export function seedBase(db, { dailyItems = true } = {}) {
   tx(db, () => {
     const insBranch = db.prepare('INSERT OR IGNORE INTO branches (code, name) VALUES (?, ?)');
     insBranch.run('halle', 'Halle');
@@ -334,6 +345,7 @@ export function seedBase(db) {
     const insCourse = db.prepare('INSERT OR IGNORE INTO courses (code, icon, safety_critical, pass_percent, content) VALUES (?,?,?,?,?)');
     for (const [code, icon, crit, pass, content] of [...COURSES, ...EXTRA_COURSES]) insCourse.run(code, icon, crit, pass, JSON.stringify(content));
   });
+  if (dailyItems) seedDailyItems(db);
   // Startvorlagen je Filiale (Manager kann sie danach ändern, sortieren, abschalten)
   for (const b of db.prepare('SELECT id FROM branches').all()) { seedStations(db, b.id); seedTemplates(db, b.id); }
 }
@@ -346,7 +358,7 @@ export function seedTemplates(db, branchId) {
   const has = db.prepare('SELECT COUNT(*) AS n FROM task_templates WHERE branch_id = ?').get(branchId).n;
   if (has) return;
   const ins = db.prepare(`INSERT INTO task_templates (branch_id, shift, position, category, frequency, weekdays, month_day, icon, title, hint,
-    requires_photo, measure_unit, sop_id, required_course_id, station_id, role, link) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+    requires_photo, measure_unit, sop_id, required_course_id, station_id, role, link, action) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
   const pos = { open: 0, run: 0, close: 0 };
   tx(db, () => {
     for (const [shift, cat, icon, title, hint, o = {}] of TEMPLATES) {
@@ -355,14 +367,14 @@ export function seedTemplates(db, branchId) {
         JSON.stringify(title), JSON.stringify(hint), o.photo ? 1 : 0, o.unit ?? null,
         o.sop ? idBy(db, 'sops', o.sop) : null, o.course ? idBy(db, 'courses', o.course) : null,
         o.station ? db.prepare('SELECT id FROM stations WHERE branch_id = ? AND code = ?').get(branchId, o.station)?.id ?? null : null,
-        o.role || 'all', o.link || null);
+        o.role || 'all', o.link || null, o.link || o.action || null);
     }
   });
 }
 
 /** Fiktive Demo-Daten. Nur für DEMO_MODE (In-Memory-Datenbank). */
 export function seedDemo(db) {
-  seedBase(db);
+  seedBase(db, { dailyItems: false });
   // In der Demo gelten die Erstversionen als freigegeben (durch Demo-Admin), damit der Ablauf sichtbar ist.
   const hash = hashPassword('demo-nur-lokal-' + Math.random());
   tx(db, () => {
@@ -448,4 +460,5 @@ export function seedDemo(db) {
         .run(b, JSON.stringify({ de: 'DEMO Test-Timer 1 Min', en: 'DEMO test timer 1 min', ar: 'مؤقت تجريبي دقيقة واحدة', tr: 'DEMO test zamanlayıcı 1 dk' }));
     }
   });
+  seedDailyItems(db);
 }

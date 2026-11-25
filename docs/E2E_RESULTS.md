@@ -1,6 +1,6 @@
 # End-to-End-Ergebnis
 
-Ausgeführt: 2026-11-25T15:13:05.226Z · Chrome · Handy-Ansicht 390×844
+Ausgeführt: 2026-11-25T21:23:13.936Z · Chrome · Handy-Ansicht 390×844
 
 - ✅ Startseite: Sprache wählen und Demo ohne Login
 - ✅ Öffnung: eine Aufgabe pro Bildschirm, Erledigt
@@ -30,8 +30,12 @@ Ausgeführt: 2026-11-25T15:13:05.226Z · Chrome · Handy-Ansicht 390×844
 - ✅ Leitung: Haltezeiten nur mit Quelle
 - ✅ Wöchentliche Inventur: Erinnerung, unvollständig abgelehnt, vollständig abgeschlossen
 - ✅ Mitarbeiter: offene Pflichtschulungen werden auf der Aufgabenseite erinnert
+- ✅ Tagesinventur Frühschicht: vollständig ausfüllen, Abgabe mit Zeit und Name
+- ✅ Schädlingskontrolle: 10 Bereiche, Befund mit Foto wird an Leitung gemeldet
+- ✅ Handbuch: Trainer trägt Einweisung ein, Mitarbeiter bestätigt
+- ✅ Leitung: Tagesinventur-Übersicht – wer hat rechtzeitig abgegeben
 - ✅ Admin: Anleitung (SOP) mit Prüfstatus und Versionen
 - ✅ Produktion: nur Anmeldung, keine Demo-Buttons, keine Standardkonten
 - ✅ Offline: keine falsche Erfolgsmeldung
 
-**31 von 31 bestanden.** Screenshots: `docs/screenshots/`
+**35 von 35 bestanden.** Screenshots: `docs/screenshots/`

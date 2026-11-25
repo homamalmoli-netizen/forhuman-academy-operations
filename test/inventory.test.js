@@ -41,7 +41,8 @@ describe('Wöchentliche Inventur und Erinnerungen', () => {
     const inv = (await emp.get(`/api/inventory?branch=${HALLE}`)).data;
     assert.equal(inv.week, isoWeek(berlinDate()));
     assert.ok(inv.items.length >= 5);
-    const [first, ...rest] = inv.items;
+    const first = inv.items.find((i) => i.expected >= 2);
+    const rest = inv.items.filter((i) => i.item_id !== first.item_id);
     assert.equal((await emp.req('PUT', '/api/inventory/lines', { branch: HALLE, lines: [{ item_id: first.item_id, counted: -1 }] })).data.error, 'counted');
     assert.equal((await emp.req('PUT', '/api/inventory/lines', { branch: HALLE, lines: [{ item_id: first.item_id, counted: first.expected - 2 }] })).data.saved, 1);
     assert.equal((await emp.post('/api/inventory/submit', { branch: HALLE })).status, 403);

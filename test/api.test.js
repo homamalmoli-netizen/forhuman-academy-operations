@@ -14,6 +14,15 @@ describe('Demo-Instanz (fiktive Daten)', () => {
     for (let i = 0; i < 30; i++) {
       const n = (await c.get(`/api/shift/next?branch=${branch}&shift=${shift}`)).data.next;
       if (!n || skipTitles.includes(n.title_de)) return n;
+      if (n.link === 'daily_early' || n.link === 'daily_late') {
+        const d = (await c.get(`/api/daily?branch=${branch}&shift=${n.link === 'daily_early' ? 'early' : 'late'}`)).data;
+        const r0 = await c.post('/api/daily', { branch, shift: d.shift, submit: true, lines: d.items.map((i) => ({ item_id: i.item_id, counted: 5 })) });
+        assert.equal(r0.status, 200, JSON.stringify(r0.data));
+      }
+      if (n.link === 'pest_check') {
+        const pd = (await c.get(`/api/pest?branch=${branch}`)).data;
+        assert.equal((await c.post('/api/pest', { branch, areas: pd.areas.map((a) => ({ area: a, finding: false, done: true })) })).status, 200);
+      }
       const body = {};
       if (n.requires_photo) body.media_id = await c.photo(branch);
       if (n.measure_unit) body.value = 4;
@@ -371,7 +380,8 @@ describe('Produktions-Instanz (ohne Demo)', () => {
     assert.equal(cfg.demo, false);
     assert.equal(cfg.has_admin, false);
     assert.equal(srv.db.prepare('SELECT COUNT(*) n FROM users').get().n, 0);
-    assert.equal(srv.db.prepare('SELECT COUNT(*) n FROM items').get().n, 0);
+    assert.equal(srv.db.prepare("SELECT COUNT(*) n FROM items WHERE name LIKE '%DEMO%' OR name LIKE '%fiktiv%'").get().n, 0);
+    assert.equal(srv.db.prepare('SELECT COUNT(*) n FROM items WHERE daily_count = 1').get().n, 16, 'Artikel der täglichen Inventurliste');
     assert.equal((await c.post('/api/login', { username: 'demo.admin', password: 'x' })).status, 401);
   });
 

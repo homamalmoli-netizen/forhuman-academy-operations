@@ -42,10 +42,10 @@ if (!demo) {
   setInterval(() => purgeExpiredMedia(db, uploadDir), 24 * 3600e3).unref();
 }
 
-// Erinnerungen stündlich prüfen (Inventur fällig/überfällig, offene Pflichtschulungen)
+// Erinnerungen regelmäßig prüfen (Inventur fällig/überfällig, offene Pflichtschulungen)
 const reminderRun = () => { for (const b of db.prepare('SELECT id FROM branches WHERE active = 1').all()) { try { runReminders(db, b.id); } catch (e) { console.error('reminder', e); } } };
 reminderRun();
-setInterval(reminderRun, 3600e3).unref();
+setInterval(reminderRun, 10 * 60e3).unref(); // alle 10 Minuten (Fristen 17:00 / 23:00)
 
 createServer(handler).listen(port, process.env.HOST || '0.0.0.0', () => {
   console.log(`ForHuman Academy & Operations ${demo ? 'DEMO (fiktive Daten, In-Memory)' : 'PRODUKTION'} auf Port ${port}`);

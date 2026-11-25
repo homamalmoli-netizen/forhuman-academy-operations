@@ -366,9 +366,9 @@ try {
 
   await step('Wöchentliche Inventur: Erinnerung, unvollständig abgelehnt, vollständig abgeschlossen', async () => {
     await sl.click('a[href="#/manage/dashboard"]');
-    await sl.locator('.stat', { hasText: 'Inventur' }).waitFor();
+    await sl.locator('.stat', { hasText: 'Inventur 20' }).waitFor();
     await sl.locator('li', { hasText: 'Inventur' }).first().waitFor(); // automatische Erinnerung in den Benachrichtigungen
-    await sl.locator('.stat', { hasText: 'Inventur' }).locator('a').click();
+    await sl.locator('.stat', { hasText: 'Inventur 20' }).locator('a').click();
     await sl.locator('form[data-submit=inventory]').waitFor();
     const inputs = sl.locator('form[data-submit=inventory] input[type=number]');
     const n = await inputs.count();
@@ -386,6 +386,58 @@ try {
     await p.click('a.tab[href="#/shift"]');
     await p.locator('.banner-card', { hasText: 'Offene Pflichtschulungen' }).waitFor();
     await shot(p, '35-erinnerung-schulung');
+  });
+
+  await step('Tagesinventur Frühschicht: vollständig ausfüllen, Abgabe mit Zeit und Name', async () => {
+    await p.click('a.tab[href="#/goods"]');
+    await p.click('a[href="#/daily/early"]');
+    await p.locator('form[data-submit=daily]').waitFor();
+    await p.click('button[value=submit]');
+    await p.locator('.flash.error', { hasText: 'Noch nicht eingetragen' }).waitFor();
+    const inputs = p.locator('form[data-submit=daily] input[name^=c]');
+    const n = await inputs.count();
+    for (let i = 0; i < n; i++) await inputs.nth(i).fill(String(5 + i));
+    await p.locator('form[data-submit=daily] .meat input[name^=m]').first().fill('3');
+    await shotFull(p, '36-tagesinventur');
+    await p.click('button[value=submit]');
+    await p.locator('.flash', { hasText: 'Tagesinventur' }).waitFor();
+    await p.locator('.inv-head .badge', { hasText: 'Demo Mitarbeiter A' }).waitFor();
+  });
+
+  await step('Schädlingskontrolle: 10 Bereiche, Befund mit Foto wird an Leitung gemeldet', async () => {
+    await p.click('a.tab[href="#/goods"]');
+    await p.click('a[href="#/pest"]');
+    await p.locator('form[data-submit=pest]').waitFor();
+    const areas = p.locator('.pest-area');
+    assert.equal(await areas.count(), 10);
+    for (let i = 0; i < 10; i++) await areas.nth(i).locator(i === 1 ? 'label.no' : 'label.yes').click();
+    await areas.nth(1).locator('input[name=n1]').fill('Angenagte Verpackung im Regal');
+    await areas.nth(1).locator('input[name=m1]').fill('Ware aussortiert, Leitung informiert');
+    await p.setInputFiles('form[data-submit=pest] input[data-change=photo]', photoPath);
+    await p.locator('form[data-submit=pest] .photo-field.ready').waitFor();
+    await shotFull(p, '37-schaedlingskontrolle');
+    await p.click('form[data-submit=pest] button.primary');
+    await p.locator('.flash.error', { hasText: 'Befall gemeldet' }).waitFor();
+  });
+
+  await step('Handbuch: Trainer trägt Einweisung ein, Mitarbeiter bestätigt', async () => {
+    await tr2.click('a[href="#/manage/onboarding"]');
+    const f = tr2.locator('form[data-submit=onboarding-trainer]', { hasText: 'Demo Mitarbeiter A' });
+    for (const a of ['Persönliche Hygiene', 'HACCP', 'Fleischinventur', 'Reinigung']) await f.locator(`input[value="${a}"]`).check();
+    await f.locator('button').click();
+    await tr2.locator('.flash.ok', { hasText: 'Einweisung eingetragen' }).waitFor();
+    await p.click('a.tab[href="#/learn"]');
+    await p.click('a[href="#/handbook"]');
+    await p.locator('details.chapter').first().click();
+    await p.click('button[data-action=onboarding-confirm]');
+    await p.locator('.banner.ok', { hasText: 'Bestätigt' }).waitFor();
+    await shotFull(p, '38-handbuch');
+  });
+
+  await step('Leitung: Tagesinventur-Übersicht – wer hat rechtzeitig abgegeben', async () => {
+    await m.click('a[href="#/manage/daily"]');
+    await m.locator('td', { hasText: 'Demo Mitarbeiter A' }).first().waitFor();
+    await shotFull(m, '39-tagesinventur-leitung');
   });
   assert.deepEqual(p.errors.concat(sl.errors, tr2.errors), [], 'JavaScript-Fehler: ' + p.errors.concat(sl.errors, tr2.errors).join('; '));
 
