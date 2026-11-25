@@ -505,6 +505,50 @@ const MIGRATIONS = [
     CHECK (user_id <> trainer_id)
   );
   `,
+
+  // 5: Marinaden-Protokoll mit fester, versionierter Rezeptur
+  `
+  CREATE TABLE marinades (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    active INTEGER NOT NULL DEFAULT 1,
+    current_version INTEGER NOT NULL DEFAULT 1
+  );
+  CREATE TABLE marinade_versions (
+    marinade_id INTEGER NOT NULL REFERENCES marinades(id),
+    version INTEGER NOT NULL,
+    ingredients TEXT NOT NULL,             -- JSON [{name, per_kg, unit}] je kg Fleisch
+    allergens TEXT,                         -- Text laut betrieblicher Allergenliste
+    tolerance_percent REAL CHECK (tolerance_percent IS NULL OR (tolerance_percent >= 0 AND tolerance_percent <= 50)),
+    use_within_hours INTEGER CHECK (use_within_hours IS NULL OR use_within_hours BETWEEN 1 AND 336),
+    use_source TEXT,                        -- Pflicht, wenn use_within_hours gesetzt (z. B. HACCP-Plan)
+    created_by INTEGER NOT NULL REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    PRIMARY KEY (marinade_id, version),
+    CHECK (use_within_hours IS NULL OR use_source IS NOT NULL)
+  );
+  CREATE TABLE marinade_batches (
+    id INTEGER PRIMARY KEY,
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    marinade_id INTEGER NOT NULL REFERENCES marinades(id),
+    recipe_version INTEGER NOT NULL,
+    meat_item_id INTEGER NOT NULL REFERENCES items(id),
+    meat_kg REAL NOT NULL CHECK (meat_kg > 0),
+    ingredients TEXT NOT NULL,             -- JSON [{name, unit, target, actual}]
+    deviations INTEGER NOT NULL DEFAULT 0,
+    batch_code TEXT NOT NULL UNIQUE,
+    use_by TEXT,
+    remaining_kg REAL,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','used','discarded')),
+    discard_reason TEXT,
+    note TEXT,
+    created_by INTEGER NOT NULL REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    closed_by INTEGER REFERENCES users(id),
+    closed_at TEXT
+  );
+  CREATE INDEX idx_batches_branch ON marinade_batches(branch_id, status);
+  `,
 ];
 
 export function openDb(file = ':memory:') {

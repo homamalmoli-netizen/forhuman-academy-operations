@@ -12,6 +12,7 @@ import { seedTemplates, seedStations } from './seed.js';
 import { registerStations, stationDashboard, stationAccess, myStationIds } from './stations.js';
 import { registerInventory, inventoryStatus, runReminders, openTrainings } from './inventory.js';
 import { registerDaily, dailyStatus } from './daily.js';
+import { registerMarinades } from './marinades.js';
 
 export const LANGS = ['de', 'ar', 'en', 'tr'];
 const SHIFTS = ['open', 'run', 'close'];
@@ -517,6 +518,7 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
         ...stationDashboard(db, branchId),
         inventory: inventoryStatus(db, branchId, date),
         daily: dailyStatus(db, branchId, date),
+        marinade_batches: db.prepare("SELECT COUNT(*) n, SUM(CASE WHEN use_by IS NOT NULL AND use_by <= ? THEN 1 ELSE 0 END) expired FROM marinade_batches WHERE branch_id = ? AND status = 'active'").get(new Date().toISOString(), branchId),
         last_pest_check: db.prepare('SELECT created_at, infestation FROM pest_checks WHERE branch_id = ? ORDER BY id DESC LIMIT 1').get(branchId) || null,
         open_trainings: openTrainings(db, branchId),
       };
@@ -974,6 +976,7 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
   registerStations({ route, db, needUser, needBranch, lang, HttpError, bad, forbidden, notFound, j, pickLang });
   registerInventory({ route, db, needUser, needBranch, HttpError, bad });
   registerDaily({ route, db, needUser, needBranch, HttpError, bad, can, notify });
+  registerMarinades({ route, db, needUser, needBranch, needAdmin, HttpError, bad, notFound, notify });
   route('PATCH', '/api/courses/:id', (ctx) => {
     const a = needAdmin(ctx);
     const c = db.prepare('SELECT * FROM courses WHERE id = ?').get(Number(ctx.params.id));
