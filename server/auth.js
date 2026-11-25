@@ -43,7 +43,7 @@ export function userFromToken(db, token) {
 /** Rollen einer Person in einer Filiale. Admin hat überall alle Rechte. */
 export function rolesIn(user, branchId) {
   if (!user) return [];
-  if (user.is_admin) return ['admin', 'manager', 'trainer', 'employee'];
+  if (user.is_admin) return ['admin', 'manager', 'shift_lead', 'trainer', 'employee'];
   return user.memberships.filter((m) => m.branch_id === Number(branchId)).map((m) => m.role);
 }
 

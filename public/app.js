@@ -62,6 +62,8 @@ function setLang(l) {
 function roles() { return S.me?.branches.find((b) => b.id === S.branch)?.roles || []; }
 const isManager = () => roles().some((r) => ['manager', 'admin'].includes(r));
 const isTrainer = () => roles().some((r) => ['trainer', 'admin'].includes(r));
+const isShiftLead = () => roles().some((r) => ['shift_lead', 'manager', 'admin'].includes(r));
+const levelLabel = (l) => tr('level_' + l);
 
 function shell(content, { tabs = true } = {}) {
   const demo = S.config?.demo ? `<div class="demo-banner" role="status">${esc(tr('demo_banner'))}</div>` : '';
@@ -71,8 +73,8 @@ function shell(content, { tabs = true } = {}) {
   const r = location.hash;
   const tab = (href, ic, label) => `<a href="${href}" class="tab ${r.startsWith(href) ? 'on' : ''}">${icon(ic)}<span>${esc(label)}</span></a>`;
   const nav = tabs && S.me ? `<nav class="tabs" aria-label="Navigation">
-      ${tab('#/shift', 'list', tr('tab_tasks'))}${tab('#/learn', 'school', tr('tab_learn'))}${tab('#/goods', 'scan', tr('tab_goods'))}${tab('#/oil', 'oil', tr('tab_oil'))}
-      ${isManager() || isTrainer() ? tab('#/manage', 'dash', tr('tab_manage')) : ''}</nav>` : '';
+      ${tab('#/shift', 'list', tr('tab_tasks'))}${tab('#/timer', 'history', tr('tab_timer'))}${tab('#/learn', 'school', tr('tab_learn'))}${tab('#/goods', 'scan', tr('tab_goods'))}${tab('#/oil', 'oil', tr('tab_oil'))}
+      ${isManager() || isTrainer() || isShiftLead() ? tab('#/manage', 'dash', tr('tab_manage')) : ''}</nav>` : '';
   const branchName = S.me?.branches.find((b) => b.id === S.branch)?.name;
   const head = S.me ? `<header class="top">
       <div class="brand"><img src="/logo.svg" alt="" width="34" height="34"><div><b>ForHuman</b><small>${esc(tr('app_name'))}</small></div></div>
@@ -83,6 +85,10 @@ function shell(content, { tabs = true } = {}) {
       </div></header>` : '';
   $app.innerHTML = `${demo}${off}${head}<main id="main" tabindex="-1">${flash}${content}</main>${nav}`;
 }
+
+// Nur das Ergebnis des zuletzt gestarteten Seitenaufbaus anzeigen (verhindert, dass langsame Antworten neuere Eingaben überschreiben)
+let renderSeq = 0;
+const render = (seq, ...args) => { if (seq === renderSeq) shell(...args); };
 
 function speak(text) {
   if (!('speechSynthesis' in window)) return;
@@ -114,7 +120,7 @@ function showError(e) {
 function viewStart() {
   const langs = Object.entries(LANG_NAMES).map(([k, v]) => `<button class="lang-btn ${k === S.lang ? 'on' : ''}" data-action="set-lang" data-lang="${k}" lang="${k}">${v}</button>`).join('');
   const demo = S.config.demo ? `<section class="card"><h2>${esc(tr('try_demo_as'))}</h2><div class="persona-grid">
-      ${['employee_halle', 'employee_leuna', 'manager_halle', 'manager_leuna', 'trainer', 'admin'].map((p) => `<button class="big-btn" data-action="demo" data-persona="${p}">${icon(p.startsWith('employee') ? 'user' : p === 'admin' ? 'settings' : p === 'trainer' ? 'school' : 'dash')}<span>${esc(tr('persona_' + p))}</span></button>`).join('')}
+      ${['employee_halle', 'employee_leuna', 'shift_lead_halle', 'manager_halle', 'manager_leuna', 'trainer', 'admin'].map((p) => `<button class="big-btn" data-action="demo" data-persona="${p}">${icon(p.startsWith('employee') ? 'user' : p === 'admin' ? 'settings' : p === 'trainer' ? 'school' : p.startsWith('shift_lead') ? 'star' : 'dash')}<span>${esc(tr('persona_' + p))}</span></button>`).join('')}
     </div></section>` : `<section class="card"><h2>${esc(tr('login'))}</h2>
       ${S.config.has_admin ? '' : `<p class="note">${esc(tr('no_admin_yet'))}</p>`}
       <form data-submit="login" class="form">
@@ -130,12 +136,18 @@ function viewStart() {
 
 // --- Mitarbeiter: eine Aufgabe pro Bildschirm -----------------------------------------
 async function viewShift() {
+  const __seq = renderSeq;
   const shiftBtns = ['open', 'run', 'close'].map((s) => `<button class="seg ${S.shift === s ? 'on' : ''}" data-action="set-shift" data-shift="${s}">${icon(s === 'open' ? 'sun' : s === 'run' ? 'run' : 'moon')}<span>${esc(tr('shift_' + s))}</span></button>`).join('');
   let d;
   try { d = await get(`/api/shift/next?${qs({ branch: S.branch, shift: S.shift, lang: S.lang })}`); }
-  catch (e) { return shell(`<div class="segs">${shiftBtns}</div>${errorBox(e)}`); }
+  catch (e) { return render(__seq, `<div class="segs">${shiftBtns}</div>${errorBox(e)}`); }
   const pct = d.total ? Math.round((d.done / d.total) * 100) : 0;
-  const progress = `<div class="progress"><span>${d.done} ${esc(tr('of'))} ${d.total}</span><progress max="100" value="${pct}" aria-label="${pct}%"></progress></div>`;
+  const mine = await get(`/api/my-stations?${qs({ branch: S.branch, shift: S.shift, lang: S.lang })}`).catch(() => []);
+  const stationHead = mine.length
+    ? `<section class="station-head"><small>${esc(tr('my_station_today'))}</small><div class="chips">${mine.map((m) => `<span class="chip on">${icon(m.icon)} ${esc(m.name)}${m.training ? ` · ${esc(tr('in_training'))}` : ''}</span>`).join('')}</div></section>`
+    : `<p class="note center">${esc(tr('no_plan'))}</p>`;
+  const groups = `<div class="groups">${d.groups.map((g) => `<div class="group ${g.done === g.total ? 'complete' : ''}"><span>${g.station_id ? esc(g.station) : esc(tr('general'))}</span><b>${g.done}/${g.total}</b></div>`).join('')}</div>`;
+  const progress = `${stationHead}<div class="progress"><span>${d.done} ${esc(tr('of'))} ${d.total}</span><progress max="100" value="${pct}" aria-label="${pct}%"></progress></div>${groups}${d.other_station_tasks ? `<p class="note center">${esc(tr('other_station_tasks'))} (${d.other_station_tasks})</p>` : ''}`;
   let body;
   const n = d.next;
   if (!n) {
@@ -145,6 +157,7 @@ async function viewShift() {
     const sayText = `${n.title}. ${n.hint || ''}`;
     body = `<article class="task-card ${n.status === 'rework' ? 'rework' : ''}" data-task="${n.id}">
         ${n.status === 'rework' ? `<div class="tag warn">${icon('history')} ${esc(tr('rework'))}</div>` : `<div class="tag">${esc(tr('next_task'))}</div>`}
+        <div class="station-tag">${n.station ? esc(n.station) : esc(tr('general'))}</div>
         <div class="task-icon">${icon(n.icon, 'huge')}</div>
         <h1 class="task-title">${esc(n.title)}</h1>
         ${n.hint ? `<p class="task-hint">${esc(n.hint)}</p>` : ''}
@@ -159,8 +172,8 @@ async function viewShift() {
       </article>`;
   }
   const blocked = d.blocked.length ? `<section class="card muted"><h3>${icon('lock')} ${esc(tr('blocked_tasks'))}</h3>
-      <ul class="plain">${d.blocked.map((b) => `<li>${icon(b.icon)} ${esc(b.title)} <a href="#/learn/${b.required_course_id}">${esc(tr('tab_learn'))} →</a></li>`).join('')}</ul></section>` : '';
-  shell(`<div class="segs">${shiftBtns}</div>${progress}${body}${blocked}`);
+      <ul class="plain">${d.blocked.map((b) => `<li>${icon(b.icon)} ${esc(b.title)}${b.station ? ` <small>(${esc(b.station)})</small>` : ''} ${b.reason === 'course' ? `<a href="#/learn/${b.required_course_id}">${esc(tr('tab_learn'))} →</a>` : `<small class="badge warn">${esc(tr('needs_station_check'))}</small>`}</li>`).join('')}</ul></section>` : '';
+  render(__seq, `<div class="segs">${shiftBtns}</div>${progress}${body}${blocked}`);
 }
 
 function photoField(purpose, label) {
@@ -194,11 +207,12 @@ function viewProblem(taskId) {
 }
 
 async function viewSop(id) {
+  const __seq = renderSeq;
   let s;
-  try { s = await get(`/api/sops/${id}?lang=${S.lang}`); } catch (e) { return shell(errorBox(e)); }
-  if (!s.published) return shell(`<section class="card">${esc(tr('sop_not_published'))}</section><a class="secondary" href="#/shift">${esc(tr('back'))}</a>`);
+  try { s = await get(`/api/sops/${id}?lang=${S.lang}`); } catch (e) { return render(__seq, errorBox(e)); }
+  if (!s.published) return render(__seq, `<section class="card">${esc(tr('sop_not_published'))}</section><a class="secondary" href="#/shift">${esc(tr('back'))}</a>`);
   const all = s.steps.map((x) => x.text).join(' ');
-  shell(`<section class="card sop">
+  render(__seq, `<section class="card sop">
       ${s.safety_review === 'pending' ? `<div class="banner danger">${icon('warn')} ${esc(tr('draft_not_for_use'))}</div>` : ''}
       ${!s.translation_reviewed ? `<div class="banner">${esc(tr('translation_unreviewed'))}</div>` : ''}
       <h1>${icon(s.icon)} ${esc(s.title)}</h1><p class="meta">${esc(s.code)} · Version ${s.version}</p>
@@ -209,9 +223,17 @@ async function viewSop(id) {
 
 // --- Academy --------------------------------------------------------------------
 async function viewLearn() {
-  let list;
-  try { list = await get(`/api/courses?${qs({ branch: S.branch, lang: S.lang })}`); } catch (e) { return shell(errorBox(e)); }
-  shell(`<h1 class="page-title">${icon('school')} ${esc(tr('courses'))}</h1>
+  const __seq = renderSeq;
+  let list, st;
+  try { [list, st] = await Promise.all([get(`/api/courses?${qs({ branch: S.branch, lang: S.lang })}`), get(`/api/stations?${qs({ branch: S.branch, lang: S.lang })}`)]); } catch (e) { return render(__seq, errorBox(e)); }
+  const ladder = ['new', 'crew', 'allrounder', 'trainer', 'shift_lead'];
+  render(__seq, `<section class="card level-card"><small>${esc(tr('level'))}</small>
+      <div class="ladder">${ladder.map((l, i) => `<span class="rung ${i < st.level.rank ? 'on' : ''} ${l === st.level.level ? 'current' : ''}">${i + 1}<small>${esc(levelLabel(l))}</small></span>`).join('')}</div>
+      <p><b>${esc(levelLabel(st.level.level))}</b> · ${st.level.certified}/${st.level.total} ${esc(tr('my_stations'))}</p></section>
+    <h2>${icon('store')} ${esc(tr('my_stations'))}</h2>
+    <div class="course-list">${st.stations.map((x) => `<div class="course">${icon(x.icon, 'big')}<div><b>${esc(x.name)}</b>${x.sop_id ? `<small><a href="#/sop/${x.sop_id}">${esc(tr('btn_guide'))} →</a></small>` : ''}</div>
+      ${x.certified ? `<span class="badge ok">${esc(tr('certified'))}</span>` : `<span class="badge">${esc(tr('not_certified'))}</span>`}</div>`).join('')}</div>
+    <h1 class="page-title">${icon('school')} ${esc(tr('courses'))}</h1>
     <div class="course-list">${list.map((c) => {
       const state = c.ok ? `<span class="badge ok">${esc(tr('qualified'))}</span>` : c.exam && c.needsPractical ? `<span class="badge warn">${esc(tr('needs_practical'))}</span>` : `<span class="badge">${esc(tr('not_started'))}</span>`;
       return `<a class="course" href="#/learn/${c.id}">${icon(c.icon, 'big')}<div><b>${esc(c.title)}</b><small>${c.steps_done}/${c.steps} ${esc(tr('step'))} ${c.safety_critical ? '· ' + icon('shield') : ''}</small></div>${state}</a>`;
@@ -219,15 +241,16 @@ async function viewLearn() {
 }
 
 async function viewCourse(id) {
+  const __seq = renderSeq;
   let c;
-  try { c = await get(`/api/courses/${id}?${qs({ branch: S.branch, lang: S.lang })}`); } catch (e) { return shell(errorBox(e)); }
+  try { c = await get(`/api/courses/${id}?${qs({ branch: S.branch, lang: S.lang })}`); } catch (e) { return render(__seq, errorBox(e)); }
   // 1) Sprache selbst wählen (vor Beginn, jederzeit vor der Prüfung änderbar)
   const langPick = `<div class="lang-grid small">${c.langs.map((l) => `<button class="lang-btn ${l === c.lang ? 'on' : ''}" data-action="set-lang" data-lang="${l}" lang="${l}">${LANG_NAMES[l]}</button>`).join('')}</div>`;
   const i = Math.min(c.steps_done, c.steps.length - 1);
   const allDone = c.steps_done >= c.steps.length;
   const stepsHtml = c.steps.map((s, k) => `<li class="${k < c.steps_done ? 'done' : k === c.steps_done ? 'current' : 'todo'}"><span class="num">${k < c.steps_done ? icon('check') : k + 1}</span><span class="step-ico">${icon(s.icon)}</span><p>${esc(s.text)}</p></li>`).join('');
   const cur = c.steps[i];
-  shell(`<section class="card course-view">
+  render(__seq, `<section class="card course-view">
       <a href="#/learn" class="back-link">${icon('back')} ${esc(tr('courses'))}</a>
       <h1>${icon(c.icon)} ${esc(c.title)}</h1>
       <p>${esc(c.intro || '')}</p>
@@ -244,9 +267,10 @@ async function viewCourse(id) {
 }
 
 async function viewExam(id) {
+  const __seq = renderSeq;
   let e;
-  try { e = await get(`/api/courses/${id}/exam?lang=${S.lang}`); } catch (err) { return shell(errorBox(err) + `<a class="secondary" href="#/learn/${id}">${esc(tr('back'))}</a>`); }
-  shell(`<section class="card exam"><h1>${icon('school')} ${esc(tr('start_exam'))}</h1>
+  try { e = await get(`/api/courses/${id}/exam?lang=${S.lang}`); } catch (err) { return render(__seq, errorBox(err) + `<a class="secondary" href="#/learn/${id}">${esc(tr('back'))}</a>`); }
+  render(__seq, `<section class="card exam"><h1>${icon('school')} ${esc(tr('start_exam'))}</h1>
       ${!e.translation_reviewed ? `<div class="banner">${esc(tr('translation_unreviewed'))}</div>` : ''}
       <form data-submit="exam" data-id="${id}" data-lang="${e.lang}">
       ${e.questions.map((q) => `<fieldset><legend>${q.index + 1}. ${esc(q.q)}</legend>${q.image ? `<div class="q-image">${icon(q.image, 'huge')}</div>` : ''}
@@ -264,9 +288,56 @@ function viewExamResult(id, r, questions) {
     </section>`);
 }
 
+// --- Timer (Haltezeiten) -------------------------------------------------------------
+let timerTick = null, beeped = new Set();
+function fmtRemain(sec) {
+  const a = Math.abs(sec), m = Math.floor(a / 60), r = a % 60;
+  return `${sec < 0 ? '+' : ''}${m}:${String(r).padStart(2, '0')}`;
+}
+function beep() {
+  try { navigator.vibrate?.([300, 150, 300]); const ac = new AudioContext(); const o = ac.createOscillator(); o.frequency.value = 880; o.connect(ac.destination); o.start(); o.stop(ac.currentTime + 0.4); } catch { /* ohne Ton */ }
+}
+async function viewTimer() {
+  const __seq = renderSeq;
+  let products, data;
+  try { [products, data] = await Promise.all([get(`/api/products?${qs({ branch: S.branch, lang: S.lang })}`), get(`/api/timers?${qs({ branch: S.branch, lang: S.lang })}`)]); } catch (e) { return render(__seq, errorBox(e)); }
+  const offset = Date.parse(data.now) - Date.now(); // Serverzeit maßgeblich
+  render(__seq, `<h1 class="page-title">${icon('history')} ${esc(tr('tab_timer'))}</h1>
+    <section class="card"><h2>${esc(tr('running_timers'))}</h2>
+      <div class="timers">${data.timers.map((t) => `<div class="timer ${t.state}" data-ends="${esc(t.ends_at)}" data-id="${t.id}" data-kind="${t.kind}">
+        <div class="timer-main">${icon(t.product.icon, 'big')}<div><b>${esc(t.product.name)}</b><small>${esc(t.kind === 'hold' ? tr('hold') : tr('cook'))} · ${esc(t.started_by)}</small></div>
+        <span class="countdown">${fmtRemain(t.remaining_s)}</span></div>
+        <div class="row"><button class="secondary" data-action="timer-end" data-id="${t.id}" data-end="done" ${t.state === 'expired' && t.kind === 'hold' ? 'disabled' : ''}>${icon('check')} ${esc(tr('used'))}</button>
+        <button class="danger" data-action="timer-end" data-id="${t.id}" data-end="discarded">${icon('trash')} ${esc(tr('discarded'))}</button></div>
+        <p class="expired-label">${icon('warn')} ${esc(tr('expired'))}</p></div>`).join('') || '<p class="note">–</p>'}</div></section>
+    <div class="product-grid">${products.filter((p) => p.active).map((p) => `<div class="product ${p.hold_minutes || p.cook_seconds ? '' : 'disabled'}">
+      ${icon(p.icon, 'big')}<b>${esc(p.name)}</b>
+      ${p.hold_minutes ? `<button class="primary" data-action="timer-start" data-id="${p.id}" data-kind="hold">${esc(tr('start_hold'))} · ${p.hold_minutes} ${esc(tr('min'))}</button>` : ''}
+      ${p.cook_seconds ? `<button class="secondary" data-action="timer-start" data-id="${p.id}" data-kind="cook">${esc(tr('start_cook'))} · ${fmtRemain(p.cook_seconds)}</button>` : ''}
+      ${!p.hold_minutes && !p.cook_seconds ? `<small class="note">${esc(tr('no_time_set'))}</small>` : ''}
+      ${p.value_source ? `<small class="source">${esc(p.value_source)}</small>` : ''}</div>`).join('')}</div>`);
+  clearInterval(timerTick);
+  const tick = () => {
+    if (!location.hash.startsWith('#/timer')) return clearInterval(timerTick);
+    document.querySelectorAll('.timer[data-ends]').forEach((el) => {
+      const rem = Math.round((Date.parse(el.dataset.ends) - (Date.now() + offset)) / 1000);
+      el.querySelector('.countdown').textContent = fmtRemain(rem);
+      if (rem <= 0 && !el.classList.contains('expired')) {
+        el.classList.add('expired');
+        const usedBtn = el.querySelector('[data-end=done]');
+        if (usedBtn && el.dataset.kind === 'hold') usedBtn.disabled = true;
+        if (!beeped.has(el.dataset.id)) { beeped.add(el.dataset.id); beep(); }
+      }
+    });
+  };
+  tick();
+  timerTick = setInterval(tick, 1000);
+}
+
 // --- Wareneingang ---------------------------------------------------------------------
 let scanState = null;
 async function viewGoods() {
+  const __seq = renderSeq;
   const items = await get('/api/items').catch(() => []);
   const sc = scanState;
   let result = '';
@@ -280,7 +351,7 @@ async function viewGoods() {
   }
   const sel = sc?.item?.id;
   const needsTemp = sc?.item?.needs_temperature;
-  shell(`<h1 class="page-title">${icon('scan')} ${esc(tr('tab_goods'))}</h1>
+  render(__seq, `<h1 class="page-title">${icon('scan')} ${esc(tr('tab_goods'))}</h1>
     <section class="card">
       <form data-submit="scan" class="form scan-form">
         <label>${esc(tr('scan_or_type'))}<input name="code" autocomplete="off" inputmode="text" value="${esc(sc?.raw || '')}"></label>
@@ -350,11 +421,12 @@ async function doScan(code) {
 
 // --- Ölmanager ------------------------------------------------------------------------
 async function viewOil() {
+  const __seq = renderSeq;
   let fryers;
-  try { fryers = await get(`/api/oil?branch=${S.branch}`); } catch (e) { return shell(errorBox(e)); }
+  try { fryers = await get(`/api/oil?branch=${S.branch}`); } catch (e) { return render(__seq, errorBox(e)); }
   const stateLabel = (f) => ({ ok: tr('oil_ok'), warn: tr('oil_warn'), change: tr('oil_change_now'), unknown: tr('oil_unknown') }[f.state]);
   const reason = (f) => ({ no_limit: tr('oil_no_limit'), no_measurement: tr('oil_no_measure'), not_measured_today: tr('oil_not_today') }[f.reason] || '');
-  shell(`<h1 class="page-title">${icon('oil')} ${esc(tr('tab_oil'))}</h1>
+  render(__seq, `<h1 class="page-title">${icon('oil')} ${esc(tr('tab_oil'))}</h1>
     ${fryers.map((f) => `<section class="card fryer state-${f.state}">
       <h2>${icon('fryer')} ${esc(f.name)} <span class="badge ${f.state}">${esc(stateLabel(f))}</span></h2>
       <p class="meta">${esc(f.manufacturer || '')} ${esc(f.model || '')}${f.model_verified ? '' : ' · Modell nicht verifiziert'} · ${esc(f.oil_product || '')}</p>
@@ -372,19 +444,22 @@ async function viewOil() {
 
 // --- Leitung ----------------------------------------------------------------------------
 function manageNav(active) {
-  const items = [['dashboard', 'dash', 'Übersicht'], ['problems', 'warn', 'Probleme'], ['report', 'report', 'Schichtbericht'], ['templates', 'list', 'Aufgaben-Vorlagen'],
+  const items = [['dashboard', 'dash', 'Übersicht'], ['positions', 'store', 'Positionsplan'], ['observe', 'eye', 'Stationscheck'], ['stations', 'star', 'Stationen & Stufen'],
+    ['problems', 'warn', 'Probleme'], ['report', 'report', 'Schichtbericht'], ['templates', 'list', 'Aufgaben-Vorlagen'], ['products', 'history', 'Haltezeiten'],
     ['training', 'school', 'Schulung & Freigaben'], ['stock', 'box', 'Bestand & Codes'], ['oil', 'oil', 'Öl-Grenzwerte'], ['audit', 'history', 'Protokoll']];
   if (S.me.is_admin) items.push(['sops', 'book', 'Anleitungen (SOP)'], ['users', 'user', 'Benutzer & Filialen']);
-  const visible = items.filter(([k]) => isManager() || k === 'training' || k === 'dashboard');
+  const allowed = { dashboard: true, positions: isShiftLead(), observe: isTrainer(), stations: isShiftLead() || isTrainer(), training: isTrainer() || isManager() };
+  const visible = items.filter(([k]) => isManager() || allowed[k]);
   return `<nav class="subnav">${visible.map(([k, ic, l]) => `<a href="#/manage/${k}" class="${active === k ? 'on' : ''}">${icon(ic)} ${l}</a>`).join('')}</nav>`;
 }
 
 async function viewManage(sub = 'dashboard', arg) {
+  const __seq = renderSeq;
   try {
-    const fn = { dashboard: mDashboard, problems: mProblems, report: mReport, templates: mTemplates, training: mTraining, stock: mStock, oil: mOil, audit: mAudit, sops: mSops, users: mUsers }[sub] || mDashboard;
+    const fn = { dashboard: mDashboard, positions: mPositions, observe: mObserve, stations: mStations, products: mProducts, problems: mProblems, report: mReport, templates: mTemplates, training: mTraining, stock: mStock, oil: mOil, audit: mAudit, sops: mSops, users: mUsers }[sub] || mDashboard;
     const html = await fn(arg);
-    shell(`${manageNav(sub)}<div class="manage">${html}</div>`);
-  } catch (e) { shell(`${manageNav(sub)}${errorBox(e)}`); }
+    render(__seq, `${manageNav(sub)}<div class="manage">${html}</div>`);
+  } catch (e) { render(__seq, `${manageNav(sub)}${errorBox(e)}`); }
 }
 
 const SHIFT_DE = { open: 'Öffnung', run: 'Betrieb', close: 'Schließung' };
@@ -398,12 +473,74 @@ async function mDashboard() {
       <article class="stat ${d.open_problems ? 'bad' : ''}"><small>Offene Probleme</small><b>${d.open_problems}</b><span><a href="#/manage/problems">ansehen →</a></span></article>
       <article class="stat"><small>Fotos heute</small><b>${d.photos_today}</b><span>Nachweise</span></article>
       <article class="stat"><small>Schulung</small><b>${d.training.qualified}/${d.training.learners * d.training.courses}</b><span>Qualifikationen</span></article>
+      <article class="stat ${d.timers_expired ? 'bad' : ''}"><small>Timer</small><b>${d.timers_running}</b><span>${d.timers_expired} abgelaufen, nicht entsorgt</span></article>
+      <article class="stat ${d.position_plans_today.length < 3 ? 'bad' : ''}"><small>Positionsplan heute</small><b>${d.position_plans_today.length}/3</b><span><a href="#/manage/positions">planen →</a></span></article>
       <article class="stat ${d.stock_below_min ? 'bad' : ''}"><small>Unter Mindestbestand</small><b>${d.stock_below_min}</b><span>${d.unknown_codes} unbekannte Codes</span></article>
     </div>
     <h2>${icon('oil')} Öl</h2><div class="stats">${d.oil.map((o) => `<article class="stat state-${o.state}"><small>${esc(o.name)}</small><b>${o.last_tpm ?? '–'} %</b><span>${esc({ ok: 'OK', warn: 'Prüfen', change: 'Wechsel nötig', unknown: o.reason === 'no_limit' ? 'Kein Grenzwert' : 'Keine Messung' }[o.state])}</span></article>`).join('')}</div>
     <h2>${icon('warn')} Benachrichtigungen (in der App)</h2>
     <p class="note">Externe Kanäle (E-Mail/Push): ${S.config.notification_channels.length ? esc(S.config.notification_channels.join(', ')) : 'keine konfiguriert – Meldungen erscheinen nur hier.'}</p>
     <ul class="plain">${d.notifications.map((n) => `<li>${fmtTime(n.created_at)} · ${esc(n.message)}</li>`).join('') || '<li>–</li>'}</ul>`).join('');
+}
+
+let planDraft = null;
+async function mPositions(arg) {
+  const [shiftArg] = (arg || '').split('/');
+  const sh = ['open', 'run', 'close'].includes(shiftArg) ? shiftArg : S.shift;
+  // Lokale Änderungen am Entwurf ohne neue Serverabfrage anzeigen (schnell, keine verlorenen Eingaben)
+  const local = S.planLocal && planDraft?.data && planDraft.shift === sh;
+  S.planLocal = false;
+  const d = local ? planDraft.data : await get(`/api/positions?${qs({ branch: S.branch, shift: sh })}`);
+  const key = `${S.branch}/${d.date}/${sh}`;
+  if (!planDraft || planDraft.key !== key) planDraft = { key, shift: sh, list: d.stations.flatMap((s) => s.assigned.map((a) => ({ station_id: s.id, user_id: a.user_id, training: a.training }))) };
+  planDraft.data = d;
+  const name = (id) => d.staff.find((p) => p.id === id)?.display_name || '?';
+  return `<h1>${icon('store')} Positionsplan · ${esc(d.date)}</h1>
+    <div class="segs">${['open', 'run', 'close'].map((s) => `<a class="seg ${s === sh ? 'on' : ''}" href="#/manage/positions/${s}">${SHIFT_DE[s]}</a>`).join('')}</div>
+    <p class="note">Nur Personen mit bestandenem Stationscheck. Neue Leute nur als „Einarbeitung“ zusammen mit einer freigegebenen Person.${d.updated_at ? ' Zuletzt gespeichert: ' + fmtTime(d.updated_at) : ' Noch nicht gespeichert.'}</p>
+    <div class="plan">${d.stations.map((s) => { const here = planDraft.list.filter((a) => a.station_id === s.id);
+      return `<section class="card plan-station"><h2>${icon(s.icon)} ${esc(s.name)} <small>${here.length ? '' : '<span class="badge warn">nicht besetzt</span>'}</small></h2>
+        <ul class="plain">${here.map((a) => `<li>${esc(name(a.user_id))} ${a.training ? '<span class="badge warn">Einarbeitung</span>' : '<span class="badge ok">freigegeben</span>'}
+          <button class="small" data-action="plan-remove" data-station="${s.id}" data-user="${a.user_id}" aria-label="entfernen">✕</button></li>`).join('')}</ul>
+        <form data-submit="plan-add" data-station="${s.id}" class="inline"><select name="user_id" required><option value="">Person wählen</option>
+          ${d.staff.map((p) => `<option value="${p.id}">${s.certified_people.includes(p.id) ? '✓ ' : '○ '}${esc(p.display_name)}</option>`).join('')}</select>
+          <label class="check"><input type="checkbox" name="training"> Einarbeitung</label><button class="small">${icon('add')} Hinzufügen</button></form></section>`; }).join('')}</div>
+    <button class="primary block" data-action="plan-save" data-shift="${sh}" data-date="${d.date}">${icon('check')} Plan speichern</button>`;
+}
+
+let observeSel = {};
+async function mObserve() {
+  const st = await get(`/api/stations?branch=${S.branch}`);
+  const sid = Number(observeSel.station) || st.stations[0]?.id;
+  const cl = sid ? await get(`/api/stations/${sid}/checklist`) : null;
+  return `<h1>${icon('eye')} Stationscheck</h1><p class="note">Mitarbeiter an der Station beobachten und jeden Punkt bewerten. Kritische Punkte müssen erfüllt sein, sonst ist der Check nicht bestanden.</p>
+    <label>Station<select data-change="observe-station">${st.stations.map((x) => `<option value="${x.id}" ${x.id === sid ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
+    ${cl ? `<form data-submit="observe" data-station="${sid}" class="form">
+      <label>Mitarbeiter<select name="user_id" required><option value="">wählen</option>${cl.people.map((p) => `<option value="${p.id}" ${p.course_ok ? '' : 'disabled'}>${esc(p.display_name)}${p.certified ? ' (bereits freigegeben)' : ''}${p.course_ok ? '' : ' – Schulung fehlt'}</option>`).join('')}</select></label>
+      <ol class="checklist">${cl.items.map((i) => `<li class="${i.critical ? 'critical' : ''}"><p>${esc(i.text)} ${i.critical ? '<span class="badge change">kritisch</span>' : ''}</p>
+        <div class="yn"><label class="yes"><input type="radio" name="i${i.id}" value="1" required> ✓ erfüllt</label><label class="no"><input type="radio" name="i${i.id}" value="0"> ✗ nicht erfüllt</label></div></li>`).join('')}</ol>
+      <label>Notiz / Feedback<textarea name="note" rows="2"></textarea></label>
+      <button class="primary block">${icon('check')} Stationscheck speichern</button></form>` : ''}`;
+}
+
+async function mStations() {
+  const m = await get(`/api/stations/matrix?branch=${S.branch}`);
+  return `<h1>${icon('star')} Stationen & Stufen</h1>
+    <p class="note">Stufen: 1 Neu · 2 Crew (mind. eine Station) · 3 Allrounder (alle Stationen) · 4 Trainer · 5 Schichtführer</p>
+    <table class="tbl matrix"><thead><tr><th>Mitarbeiter</th><th>Stufe</th>${m.stations.map((s) => `<th title="${esc(s.name)}">${icon(s.icon)}<br><small>${esc(s.name)}</small></th>`).join('')}</tr></thead><tbody>
+    ${m.people.map((p) => `<tr><td>${esc(p.display_name)}</td><td><span class="badge ${p.rank >= 3 ? 'ok' : ''}">${p.rank} ${esc(levelLabel(p.level))}</span></td>
+      ${m.stations.map((s) => `<td class="cell ${p.stations[s.id] ? 'yes' : 'no'}">${p.stations[s.id] ? '✓' : '–'}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+}
+
+async function mProducts() {
+  const [products, st] = await Promise.all([get(`/api/products?branch=${S.branch}`), get(`/api/stations?branch=${S.branch}`)]);
+  return `<h1>${icon('history')} Produkte & Haltezeiten</h1><p class="note">Zeiten nur aus Herstellerangabe, freigegebener Rezeptur oder HACCP-Plan – mit Quelle. Ohne Zeit kann kein Timer gestartet werden.</p>
+    ${products.map((p) => `<form data-submit="product" data-id="${p.id}" class="card form"><h2>${icon(p.icon)} ${esc(p.name_de)} <small>${esc(st.stations.find((x) => x.id === p.station_id)?.name || '')}</small></h2>
+      <div class="grid2"><label>Haltezeit (Minuten)<input name="hold_minutes" type="number" min="1" max="720" value="${p.hold_minutes ?? ''}"></label>
+      <label>Garzeit/Programm (Sekunden)<input name="cook_seconds" type="number" min="10" max="7200" value="${p.cook_seconds ?? ''}"></label>
+      <label>Quelle (Pflicht bei Werten)<input name="value_source" value="${esc(p.value_source || '')}"></label></div><button class="primary">Speichern</button></form>`).join('')}
+    <h2>Neues Produkt</h2><form data-submit="product-new" class="form"><div class="grid2"><label>Name<input name="name_de" required></label>
+      <label>Station<select name="station_id"><option value="">–</option>${st.stations.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></label></div><button class="primary">${icon('add')} Anlegen</button></form>`;
 }
 
 async function mProblems() {
@@ -437,21 +574,24 @@ async function mReport(arg) {
 }
 
 async function mTemplates() {
-  const list = await get(`/api/templates?branch=${S.branch}`);
+  const [list, st] = await Promise.all([get(`/api/templates?branch=${S.branch}`), get(`/api/stations?branch=${S.branch}`)]);
+  const stationSel = (tp) => `<select class="small-select" data-change="tpl-station" data-id="${tp.id}" aria-label="Station"><option value="">Allgemein</option>${st.stations.map((x) => `<option value="${x.id}" ${x.id === tp.station_id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>`;
   const byShift = { open: [], run: [], close: [] };
   list.forEach((tp) => byShift[tp.shift].push(tp));
   return `<h1>${icon('list')} Aufgaben-Vorlagen</h1><p class="note">Reihenfolge, Foto-Pflicht und Wochentage gelten nur für diese Filiale. Grenzwerte nur mit Quelle (HACCP-Plan/Herstellerangabe).</p>
     ${Object.entries(byShift).map(([s, arr]) => `<h2>${SHIFT_DE[s]}</h2><ul class="tpl-list">${arr.map((tp) => `<li class="${tp.active ? '' : 'inactive'}">
-      <span>${icon(tp.icon)} <b>${esc(tp.title.de)}</b> <small>${esc(tp.frequency)}${tp.frequency !== 'monthly' ? ' · Tage ' + esc(tp.weekdays) : ' · Tag ' + tp.month_day}${tp.measure_unit ? ' · Messwert ' + esc(tp.measure_unit) + (tp.limit_min != null || tp.limit_max != null ? ` (${tp.limit_min ?? '–'}…${tp.limit_max ?? '–'})` : ' (kein Grenzwert)') : ''}</small></span>
+      <span>${icon(tp.icon)} <b>${esc(tp.title.de)}</b> <small class="badge">${esc(tp.station_name || 'Allgemein')}</small> <small>${esc(tp.frequency)}${tp.frequency !== 'monthly' ? ' · Tage ' + esc(tp.weekdays) : ' · Tag ' + tp.month_day}${tp.measure_unit ? ' · Messwert ' + esc(tp.measure_unit) + (tp.limit_min != null || tp.limit_max != null ? ` (${tp.limit_min ?? '–'}…${tp.limit_max ?? '–'})` : ' (kein Grenzwert)') : ''}</small></span>
       <span class="tpl-actions">
         <button class="small" data-action="tpl-move" data-id="${tp.id}" data-dir="up" aria-label="nach oben">${icon('up')}</button>
         <button class="small" data-action="tpl-move" data-id="${tp.id}" data-dir="down" aria-label="nach unten">${icon('down')}</button>
         <button class="small ${tp.requires_photo ? 'on' : ''}" data-action="tpl-photo" data-id="${tp.id}" data-val="${tp.requires_photo ? 0 : 1}">${icon('camera')} ${tp.requires_photo ? 'Pflicht' : 'optional'}</button>
         <button class="small" data-action="tpl-active" data-id="${tp.id}" data-val="${tp.active ? 0 : 1}">${tp.active ? 'aktiv' : 'aus'}</button>
+        ${stationSel(tp)}
       </span></li>`).join('')}</ul>`).join('')}
     <h2>Neue Aufgabe</h2><form data-submit="tpl-new" class="form"><div class="grid2">
       <label>Schicht<select name="shift"><option value="open">Öffnung</option><option value="run">Betrieb</option><option value="close">Schließung</option></select></label>
       <label>Titel (kurz)<input name="title_de" required maxlength="120"></label><label>Hinweis (ein Satz)<input name="hint_de" maxlength="200"></label>
+      <label>Station<select name="station_id"><option value="">Allgemein</option>${st.stations.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></label>
       <label class="check"><input type="checkbox" name="requires_photo"> Foto Pflicht</label></div><button class="primary">${icon('add')} Anlegen</button></form>`;
 }
 
@@ -520,7 +660,7 @@ async function mUsers() {
     <h2>Neuer Benutzer</h2><form data-submit="user-new" class="form"><div class="grid2"><label>Anzeigename<input name="display_name" required></label><label>Benutzername<input name="username" required pattern="[A-Za-z0-9._-]{3,40}"></label>
       <label>Startpasswort (min. 10 Zeichen)<input name="password" type="password" required minlength="10" autocomplete="new-password"></label>
       <label>Filiale<select name="branch_id">${branches.map((b) => `<option value="${b.id}">${esc(b.name)}</option>`).join('')}</select></label>
-      <label>Rolle<select name="role"><option value="employee">Mitarbeiter</option><option value="trainer">Trainer</option><option value="manager">Filialleitung</option></select></label></div>
+      <label>Rolle<select name="role"><option value="employee">Mitarbeiter</option><option value="shift_lead">Schichtführer</option><option value="trainer">Trainer</option><option value="manager">Filialleitung</option></select></label></div>
       <button class="primary">${icon('add')} Anlegen</button></form>
     <h2>Datenschutz</h2><form data-submit="settings" class="form"><label>Fotos aufbewahren (Tage, 30–3650)<input name="photo_retention_days" type="number" min="30" max="3650" value="${esc(settings.photo_retention_days)}"></label><button class="primary">Speichern</button></form>
     <h2>Neue Filiale</h2><form data-submit="branch-new" class="form"><div class="grid2"><label>Kürzel<input name="code" required pattern="[a-z0-9-]{2,30}"></label><label>Name<input name="name" required></label></div><button class="primary">${icon('add')} Anlegen</button></form>`;
@@ -528,6 +668,7 @@ async function mUsers() {
 
 // --- Router ----------------------------------------------------------------------------
 async function route() {
+  renderSeq++;
   if (!S.me) return viewStart();
   const [, a, b, c, d] = (location.hash || '#/shift').split('/');
   if (!S.me.branches.some((x) => x.id === S.branch)) { S.branch = S.me.branches[0]?.id; localStorage.setItem('fh_branch', S.branch); }
@@ -535,6 +676,7 @@ async function route() {
   switch (a) {
     case 'learn': return b ? viewCourse(b) : viewLearn();
     case 'exam': return viewExam(b);
+    case 'timer': return viewTimer();
     case 'goods': return viewGoods();
     case 'oil': return viewOil();
     case 'problem': return viewProblem(b);
@@ -573,6 +715,10 @@ document.addEventListener('click', async (ev) => {
     if (A === 'tpl-photo') { await api('PATCH', `/api/templates/${el.dataset.id}`, { requires_photo: el.dataset.val === '1' }); return route(); }
     if (A === 'tpl-active') { await api('PATCH', `/api/templates/${el.dataset.id}`, { active: el.dataset.val === '1' }); return route(); }
     if (A === 'signoff') { await post('/api/signoffs', { branch: S.branch, user_id: Number(el.dataset.user), course_id: Number(el.dataset.course) }); S.flash = { type: 'ok', text: 'Praktische Freigabe gespeichert' }; return route(); }
+    if (A === 'timer-start') { await post('/api/timers', { branch: S.branch, product_id: Number(el.dataset.id), kind: el.dataset.kind }); return route(); }
+    if (A === 'timer-end') { await post(`/api/timers/${el.dataset.id}/end`, { action: el.dataset.end }); S.flash = { type: 'ok', text: tr('saved') }; return route(); }
+    if (A === 'plan-remove') { planDraft.list = planDraft.list.filter((a) => !(a.station_id === Number(el.dataset.station) && a.user_id === Number(el.dataset.user))); S.planLocal = true; return route(); }
+    if (A === 'plan-save') { await api('PUT', '/api/positions', { branch: S.branch, date: el.dataset.date, shift: el.dataset.shift, assignments: planDraft.list }); planDraft = null; S.flash = { type: 'ok', text: 'Positionsplan gespeichert' }; return route(); }
     if (A === 'sop-publish') { await post(`/api/admin/sops/${el.dataset.id}/publish`, { version_no: Number(el.dataset.version) }); S.flash = { type: 'ok', text: 'Freigegeben' }; return route(); }
   } catch (e) { showError(e); }
 });
@@ -594,6 +740,8 @@ document.addEventListener('change', async (ev) => {
   try {
     if (C === 'lang') { setLang(el.value); return route(); }
     if (C === 'branch') { S.branch = Number(el.value); localStorage.setItem('fh_branch', S.branch); return route(); }
+    if (C === 'observe-station') { observeSel.station = el.value; return route(); }
+    if (C === 'tpl-station') { await api('PATCH', `/api/templates/${el.dataset.id}`, { station_id: el.value || null }); S.flash = { type: 'ok', text: tr('saved') }; return route(); }
     if (C === 'sop-review') { await api('PATCH', `/api/admin/sops/${el.dataset.id}`, { safety_review: el.value }); S.flash = { type: 'ok', text: tr('saved') }; return route(); }
     if (C === 'photo') {
       const f = el.files?.[0];
@@ -652,7 +800,7 @@ document.addEventListener('submit', async (ev) => {
       case 'waste': await post('/api/stock/movement', { branch: S.branch, item_id: Number(form.dataset.item), type: 'waste', quantity: fd.quantity, note: fd.note }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'problem-action': await post(`/api/problems/${form.dataset.id}/${submitter?.value === 'rework' ? 'rework' : 'resolve'}`, { note: fd.note }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'approve-shift': await post('/api/shifts/approve', { branch: S.branch, shift: form.dataset.shift, date: form.dataset.date, note: fd.note }); S.flash = { type: 'ok', text: 'Schicht freigegeben' }; break;
-      case 'tpl-new': await post('/api/templates', { branch: S.branch, shift: fd.shift, title_de: fd.title_de, hint_de: fd.hint_de, requires_photo: !!fd.requires_photo }); S.flash = { type: 'ok', text: tr('saved') }; break;
+      case 'tpl-new': await post('/api/templates', { branch: S.branch, shift: fd.shift, title_de: fd.title_de, hint_de: fd.hint_de, requires_photo: !!fd.requires_photo, station_id: fd.station_id || null }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'assign-code': await post(`/api/goods/unknown/${form.dataset.id}/assign`, { item_id: Number(fd.item_id) }); S.flash = { type: 'ok', text: 'Code zugeordnet' }; break;
       case 'item-new': await post('/api/items', { ...fd, branch: S.branch, needs_temperature: !!fd.needs_temperature }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'receipt-doc': await post('/api/goods/documents', { branch: S.branch, receipt_no: fd.receipt_no, media_id: S.photo?.purpose === 'receipt' ? S.photo.id : undefined }); S.photo = null; S.flash = { type: 'ok', text: tr('saved') }; break;
@@ -665,6 +813,21 @@ document.addEventListener('submit', async (ev) => {
         S.flash = { type: 'ok', text: 'Neue Entwurfsversion gespeichert – jetzt freigeben.' }; location.hash = '#/manage/sops'; break;
       }
       case 'user-new': await post('/api/admin/users', { username: fd.username, display_name: fd.display_name, password: fd.password, memberships: [{ branch_id: Number(fd.branch_id), role: fd.role }] }); S.flash = { type: 'ok', text: tr('saved') }; break;
+      case 'plan-add': {
+        const sid = Number(form.dataset.station), uid = Number(fd.user_id);
+        planDraft.list = planDraft.list.filter((a) => !(a.station_id === sid && a.user_id === uid));
+        planDraft.list.push({ station_id: sid, user_id: uid, training: !!fd.training });
+        S.planLocal = true;
+        break;
+      }
+      case 'observe': {
+        const items = [...form.querySelectorAll('.checklist input[type=radio]:checked')].map((r) => ({ item_id: Number(r.name.slice(1)), ok: r.value === '1' }));
+        const r = await post('/api/observations', { branch: S.branch, station_id: Number(form.dataset.station), user_id: Number(fd.user_id), results: items, note: fd.note });
+        S.flash = { type: r.passed ? 'ok' : 'error', text: r.passed ? `Bestanden (${r.score}/${r.total}) – Station freigegeben. Stufe: ${levelLabel(r.level.level)}` : `Nicht bestanden (${r.score}/${r.total}${r.critical_failed ? `, ${r.critical_failed} kritisch` : ''}). Nachschulen und erneut prüfen.` };
+        break;
+      }
+      case 'product': await api('PATCH', `/api/products/${form.dataset.id}`, fd); S.flash = { type: 'ok', text: tr('saved') }; break;
+      case 'product-new': await post('/api/products', { branch: S.branch, name_de: fd.name_de, station_id: fd.station_id || null }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'settings': await api('PUT', '/api/admin/settings', { photo_retention_days: Number(fd.photo_retention_days) }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'branch-new': await post('/api/admin/branches', fd); await loadMe(); S.flash = { type: 'ok', text: tr('saved') }; break;
     }
@@ -672,7 +835,7 @@ document.addEventListener('submit', async (ev) => {
   } catch (e) { showError(e); } finally { btns.forEach((b) => (b.disabled = false)); }
 });
 
-window.addEventListener('hashchange', () => { if (!location.hash.startsWith('#/shift')) S.photo = null; route(); });
+window.addEventListener('hashchange', () => { if (!location.hash.startsWith('#/shift')) S.photo = null; if (!location.hash.startsWith('#/timer')) clearInterval(timerTick); route(); });
 const toggleOffline = () => { const b = document.getElementById('offline-banner'); if (b) b.hidden = navigator.onLine; };
 window.addEventListener('online', toggleOffline);
 window.addEventListener('offline', toggleOffline);

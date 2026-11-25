@@ -28,9 +28,13 @@ const photoPath = join(tmp, 'foto.jpg');
 writeFileSync(photoPath, JPEG);
 
 const results = [];
+const pages = [];
 async function step(name, fn) {
   try { await fn(); results.push(['✅', name]); console.log('✅', name); }
-  catch (e) { results.push(['❌', name, e.message]); console.log('❌', name, '\n   ', e.message); }
+  catch (e) {
+    results.push(['❌', name, e.message.split('\n')[0]]); console.log('❌', name, '\n   ', e.message.split('\n').slice(0, 4).join('\n    '));
+    for (const [i, pg] of pages.entries()) await pg.screenshot({ path: join(tmp, `fail-${results.length}-${i}.png`) }).catch(() => {});
+  }
 }
 
 const demo = await start({ DEMO_MODE: '1' }, 3931);
@@ -42,6 +46,7 @@ async function newPage() {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, locale: 'de-DE' });
   const page = await ctx.newPage();
   page.errors = [];
+  pages.push(page);
   page.on('pageerror', (e) => page.errors.push(String(e)));
   return page;
 }
@@ -123,7 +128,7 @@ try {
 
   await step('Academy: Sprache wählen, Schritte, Prüfung gesperrt, Bildfrage, Ergebnis', async () => {
     await p.click('a.tab[href="#/learn"]');
-    await p.locator('.course', { hasText: 'Hochdruckfritteuse' }).click();
+    await p.locator('a.course', { hasText: 'Hochdruckfritteuse' }).click();
     await p.locator('button:has-text("Prüfung erst nach allen Schritten")').waitFor();
     await shot(p, '09-academy-lernschritt');
     for (let i = 0; i < 4; i++) { await p.click('button[data-action=learn-step]'); await p.waitForTimeout(150); }
@@ -261,6 +266,104 @@ try {
     await l.click('a[href="#/manage/problems"]');
     await l.locator('text=Keine Probleme.').waitFor();
   });
+
+
+  // --- Stationen, Positionsplan, Stationscheck, Timer ---
+  const sl = await newPage();
+  await step('Schichtführer: Positionsplan nur mit freigegebenen Personen', async () => {
+    await sl.goto(D + '/');
+    await sl.click('[data-persona=shift_lead_halle]');
+    await sl.click('a[href="#/manage/positions"]');
+    await sl.locator('.plan-station').first().waitFor();
+    const theke = sl.locator('.plan-station', { hasText: 'Kasse & Theke' });
+    await theke.locator('select[name=user_id]').selectOption({ label: '✓ Demo Mitarbeiter A (fiktiv)' });
+    await theke.locator('form[data-submit=plan-add] button').click();
+    await sl.locator('.plan-station', { hasText: 'Kasse & Theke' }).locator('li', { hasText: 'Mitarbeiter A' }).waitFor();
+    const pommes = sl.locator('.plan-station', { hasText: 'Pommes-Fritteuse' });
+    await pommes.locator('select[name=user_id]').selectOption({ label: '○ Demo Mitarbeiter A (fiktiv)' });
+    await pommes.locator('form[data-submit=plan-add] button').click();
+    await sl.locator('.plan-station', { hasText: 'Pommes-Fritteuse' }).locator('li', { hasText: 'Mitarbeiter A' }).waitFor();
+    await sl.click('button[data-action=plan-save]');
+    await sl.locator('.flash.error', { hasText: 'nicht freigegeben' }).waitFor();
+    await sl.locator('.plan-station', { hasText: 'Pommes-Fritteuse' }).locator('button[data-action=plan-remove]').click();
+    await sl.locator('.plan-station', { hasText: 'Pommes-Fritteuse' }).locator('li', { hasText: 'Mitarbeiter A' }).waitFor({ state: 'detached' });
+    const pom2 = sl.locator('.plan-station', { hasText: 'Pommes-Fritteuse' });
+    await pom2.locator('select[name=user_id]').selectOption({ label: '✓ Demo Schichtführer Halle (fiktiv)' });
+    await pom2.locator('form[data-submit=plan-add] button').click();
+    await sl.locator('.plan-station', { hasText: 'Pommes-Fritteuse' }).locator('li', { hasText: 'Schichtführer' }).waitFor();
+    await sl.click('button[data-action=plan-save]');
+    await sl.locator('.flash.ok', { hasText: 'Positionsplan gespeichert' }).waitFor();
+    await shotFull(sl, '26-positionsplan');
+  });
+
+  await step('Mitarbeiter: eigene Station oben, Aufgaben nach Station strukturiert', async () => {
+    await p.click('a.tab[href="#/learn"]');
+    await p.click('a.tab[href="#/shift"]');
+    await p.click('button[data-shift=open]');
+    await p.locator('.station-head', { hasText: 'Kasse & Theke' }).waitFor();
+    await p.locator('.groups .group').first().waitFor();
+    await shot(p, '27-meine-station-aufgaben');
+  });
+
+  const tr2 = await newPage();
+  await step('Trainer: Stationscheck – kritischer Punkt nicht erfüllt, dann bestanden', async () => {
+    await tr2.goto(D + '/');
+    await tr2.click('[data-persona=trainer]');
+    await tr2.click('a[href="#/manage/observe"]');
+    await tr2.selectOption('select[data-change=observe-station]', { label: 'Burger & Wraps' });
+    await tr2.locator('form[data-submit=observe]').waitFor();
+    const fill = async (failCritical) => {
+      await tr2.selectOption('form[data-submit=observe] select[name=user_id]', { label: 'Demo Mitarbeiter A (fiktiv)' });
+      const items = tr2.locator('.checklist li');
+      const n = await items.count();
+      for (let i = 0; i < n; i++) {
+        const li = items.nth(i);
+        const crit = (await li.getAttribute('class'))?.includes('critical');
+        await li.locator(failCritical && crit && i === 0 ? 'label.no' : 'label.yes').click();
+      }
+    };
+    await fill(true);
+    await shotFull(tr2, '28-stationscheck');
+    await tr2.click('form[data-submit=observe] button.primary');
+    await tr2.locator('.flash.error', { hasText: 'Nicht bestanden' }).waitFor();
+    await fill(false);
+    await tr2.click('form[data-submit=observe] button.primary');
+    await tr2.locator('.flash.ok', { hasText: 'Bestanden' }).waitFor();
+    await tr2.click('a[href="#/manage/stations"]');
+    await tr2.locator('.matrix').waitFor();
+    await shotFull(tr2, '29-stationen-stufen');
+  });
+
+  await step('Mitarbeiter: Stufe und Stationen in „Lernen“', async () => {
+    await p.click('a.tab[href="#/learn"]');
+    await p.locator('.level-card').waitFor();
+    await shot(p, '30-stufe-stationen');
+  });
+
+  await step('Timer: Haltezeit starten, Ablauf → nur Entsorgen', async () => {
+    await p.click('a.tab[href="#/timer"]');
+    await p.locator('.product', { hasText: 'Burger-Filet' }).locator('button[data-kind=hold]').click();
+    await p.locator('.timer', { hasText: 'Burger-Filet' }).waitFor();
+    await p.locator('.product', { hasText: 'DEMO Test-Timer' }).locator('button[data-kind=hold]').click();
+    await p.locator('.timer', { hasText: 'DEMO Test-Timer' }).waitFor();
+    await shot(p, '31-timer-laeuft');
+    await p.locator('.timer.expired', { hasText: 'DEMO Test-Timer' }).waitFor({ timeout: 75000 });
+    assert.equal(await p.locator('.timer.expired button[data-end=done]').isDisabled(), true);
+    await shot(p, '32-timer-abgelaufen');
+    await p.locator('.timer.expired button[data-end=discarded]').click();
+    await p.locator('.flash.ok').waitFor();
+    assert.equal(await p.locator('.timer', { hasText: 'DEMO Test-Timer' }).count(), 0);
+  });
+
+  await step('Leitung: Haltezeiten nur mit Quelle', async () => {
+    await m.click('a[href="#/manage/products"]');
+    const f = m.locator('form[data-submit=product]').first();
+    await f.locator('input[name=value_source]').fill('');
+    await f.locator('button').click();
+    await m.locator('.flash.error', { hasText: 'Quelle' }).waitFor();
+    await shot(m, '33-haltezeiten');
+  });
+  assert.deepEqual(p.errors.concat(sl.errors, tr2.errors), [], 'JavaScript-Fehler: ' + p.errors.concat(sl.errors, tr2.errors).join('; '));
 
   const a = await newPage();
   await step('Admin: Anleitung (SOP) mit Prüfstatus und Versionen', async () => {

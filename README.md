@@ -21,6 +21,10 @@ Die Demo nutzt eine eigene In-Memory-Datenbank und einen temporären Foto-Ordner
 
 | Bereich | Umgesetzt |
 |---|---|
+| Stationen & Positionen | 6 Stationen je Filiale (Panieren, Hochdruckfritteuse, Pommes, Burger & Wraps, Kasse & Theke, Packen & Ausgabe), jede mit Anleitung, Schulung und eigener Stationscheck-Liste; **jede Aufgabe gehört zu einer Station oder „Allgemein“** |
+| Stationscheck & Stufen | Trainer beobachtet an der Station und bewertet jeden Punkt; kritische Punkte müssen erfüllt sein. Bestanden → Station freigegeben. Stufen 1 Neu · 2 Crew · 3 Allrounder · 4 Trainer · 5 Schichtführer |
+| Positionsplan | Schichtführer/Leitung teilt je Schicht Personen den Stationen zu – nur mit Freigabe, neue Leute nur als Einarbeitung neben einer freigegebenen Person. Mitarbeiter sehen oben „Deine Station heute“ und zuerst deren Aufgaben, fremde Stationen ausgeblendet |
+| Haltezeit-Timer | Timer je Produkt mit Countdown, Ton/Vibration bei Ablauf; abgelaufene Ware kann nur noch als „entsorgt“ gebucht werden. Zeiten trägt nur die Leitung **mit Quelle** ein, ohne Zeit kein Timer |
 | Mitarbeiter-Modus | Filiale + Schicht (Öffnung / laufender Betrieb / Schließung), **immer nur die nächste Aufgabe**, große Symbole, kurze Sätze, Buttons *Vorlesen*, *Anleitung*, *Problem melden*, *Erledigt* |
 | Aufgaben | Automatisch je Filiale, Schicht, Wochentag bzw. Monatstag erzeugt, **keine Dubletten** (Datenbank-Schlüssel); Pflichtfoto, Messwerte, Nacharbeit wird zuerst angezeigt |
 | Checklisten | Öffnung, Betrieb, Schließung inkl. Licht, Hygiene, Temperaturen, Ware, Müll, Geräte (Kühlung bleibt an), Türen; wöchentliche Reinigung, Schädlingskontrolle, monatliche Geräte-Sichtprüfung |
@@ -39,8 +43,8 @@ Was noch fehlt, steht ehrlich in [docs/STATUS.md](docs/STATUS.md).
 ## Tests
 
 ```bash
-npm test     # 27 API- und Logiktests (node:test)
-npm run e2e  # 23 Browser-Abläufe in Chrome (Handy-Ansicht), erzeugt docs/screenshots/ und docs/E2E_RESULTS.md
+npm test     # 35 API- und Logiktests (node:test)
+npm run e2e  # 29 Browser-Abläufe in Chrome (Handy-Ansicht), erzeugt docs/screenshots/ und docs/E2E_RESULTS.md
 ```
 
 ## Echtbetrieb
@@ -50,7 +54,7 @@ Siehe [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) (STRATO VPS, HTTPS, sichere Admin
 ## Aufbau
 
 ```
-server/   index.js (Start) · app.js (API) · db.js (Schema/Migrationen) · auth.js · seed.js (Startvorlagen, Demo-Daten)
+server/   index.js (Start) · app.js (API) · stations.js (Stationen, Plan, Timer) · db.js (Schema/Migrationen) · auth.js · seed.js (Startvorlagen, Demo-Daten)
 shared/   codes.js (Barcode-/QR-Erkennung, Server + Browser)
 public/   index.html · app.js · i18n.js · icons.js · style.css · sw.js · manifest
 scripts/  create-admin.js (erster Betreiber-Account)

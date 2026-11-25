@@ -20,23 +20,31 @@ const TEMPLATES = [
   ['open', 'haccp', 'snow', L('Tiefkühler: Temperatur ablesen', 'Freezer: read the temperature', 'المجمّد: اقرأ درجة الحرارة', 'Derin dondurucu: sıcaklığı oku'),
     L('Wert eintragen. Foto vom Thermometer.', 'Enter the value. Photo of the thermometer.', 'أدخل القيمة. صوّر الميزان.', 'Değeri gir. Termometrenin fotoğrafı.'), { photo: 1, unit: '°C' }],
   ['open', 'equipment', 'fryer', L('Fritteuse bereit machen', 'Get the fryer ready', 'جهّز القلاية', 'Fritözü hazırla'),
-    L('Nur mit Freigabe. Nach Anleitung des Herstellers.', 'Only if you are approved. Follow the manufacturer manual.', 'فقط بعد الإذن. حسب دليل الشركة المصنّعة.', 'Sadece onaylıysan. Üretici kılavuzuna göre.'), { sop: 'SOP-FRYER-GGM', course: 'C-FRYER-GGM' }],
+    L('Nur mit Freigabe. Nach Anleitung des Herstellers.', 'Only if you are approved. Follow the manufacturer manual.', 'فقط بعد الإذن. حسب دليل الشركة المصنّعة.', 'Sadece onaylıysan. Üretici kılavuzuna göre.'), { sop: 'SOP-FRYER-GGM', course: 'C-FRYER-GGM', station: 'druckfritteuse' }],
   ['open', 'goods', 'box', L('Ware prüfen', 'Check stock', 'افحص البضاعة', 'Malları kontrol et'),
     L('Haltbarkeit ansehen. Abgelaufenes melden.', 'Look at best-before dates. Report expired items.', 'انظر إلى تاريخ الصلاحية. أبلغ عن المنتهي.', 'Son kullanma tarihlerine bak. Süresi geçeni bildir.')],
   ['open', 'routine', 'prep', L('Arbeitsplatz vorbereiten', 'Prepare your workstation', 'جهّز مكان العمل', 'Çalışma yerini hazırla'),
-    L('Sauber, aufgeräumt, alles griffbereit.', 'Clean, tidy, everything at hand.', 'نظيف ومرتب وكل شيء في متناول اليد.', 'Temiz, düzenli, her şey elinin altında.')],
+    L('Sauber, aufgeräumt, alles griffbereit.', 'Clean, tidy, everything at hand.', 'نظيف ومرتب وكل شيء في متناول اليد.', 'Temiz, düzenli, her şey elinin altında.'), { station: 'panieren' }],
+  ['open', 'routine', 'store', L('Theke vorbereiten', 'Prepare the counter', 'جهّز الكاونتر', 'Tezgâhı hazırla'),
+    L('Theke sauber, Bildschirme an, Tüten bereit.', 'Counter clean, screens on, bags ready.', 'الكاونتر نظيف والشاشات تعمل والأكياس جاهزة.', 'Tezgâh temiz, ekranlar açık, poşetler hazır.'), { station: 'theke' }],
+  ['open', 'routine', 'fryer', L('Pommes-Station vorbereiten', 'Prepare the fries station', 'جهّز محطة البطاطا', 'Patates istasyonunu hazırla'),
+    L('Körbe, Salz, Schaufel, Tüten bereit.', 'Baskets, salt, scoop, bags ready.', 'السلال والملح والمغرفة والأكياس جاهزة.', 'Sepetler, tuz, kepçe, poşetler hazır.'), { station: 'pommes' }],
   // Laufender Betrieb
   ['run', 'hygiene', 'hands', L('Hände waschen', 'Wash your hands', 'اغسل يديك', 'Ellerini yıka'),
     L('Nach rohem Fleisch, Müll und Pause.', 'After raw meat, rubbish and breaks.', 'بعد اللحم النيء والقمامة والاستراحة.', 'Çiğ etten, çöpten ve moladan sonra.'), { sop: 'SOP-HANDS' }],
   ['run', 'hygiene', 'shield', L('Roh und fertig trennen', 'Keep raw and cooked apart', 'افصل النيء عن المطبوخ', 'Çiğ ve pişmişi ayır'),
-    L('Eigene Bretter und Zangen benutzen.', 'Use separate boards and tongs.', 'استخدم ألواحًا وملاقط منفصلة.', 'Ayrı tahta ve maşa kullan.')],
+    L('Eigene Bretter und Zangen benutzen.', 'Use separate boards and tongs.', 'استخدم ألواحًا وملاقط منفصلة.', 'Ayrı tahta ve maşa kullan.'), { station: 'panieren' }],
   ['run', 'cleaning', 'spray', L('Flächen reinigen', 'Clean surfaces', 'نظّف الأسطح', 'Yüzeyleri temizle'),
     L('Reinigungsmittel laut Etikett benutzen.', 'Use cleaning product as on the label.', 'استخدم المنظّف حسب الملصق.', 'Temizlik ürününü etikete göre kullan.'), { sop: 'SOP-SURFACES' }],
   ['run', 'routine', 'refill', L('Nachfüllen', 'Refill', 'أعد التعبئة', 'Doldur'),
-    L('Verpackung, Saucen, Servietten.', 'Packaging, sauces, napkins.', 'العبوات والصلصات والمناديل.', 'Ambalaj, soslar, peçeteler.')],
+    L('Verpackung, Saucen, Servietten.', 'Packaging, sauces, napkins.', 'العبوات والصلصات والمناديل.', 'Ambalaj, soslar, peçeteler.'), { station: 'ausgabe' }],
   ['run', 'equipment', 'oil', L('Öl messen (TPM)', 'Measure oil (TPM)', 'قِس الزيت (TPM)', 'Yağı ölç (TPM)'),
-    L('Im Ölmanager eintragen. Foto vom Messgerät.', 'Enter in Oil manager. Photo of the meter.', 'سجّل في إدارة الزيت. صوّر جهاز القياس.', 'Yağ yöneticisine gir. Ölçerin fotoğrafı.'), { course: 'C-FRYER-GGM' }],
+    L('Im Ölmanager eintragen. Foto vom Messgerät.', 'Enter in Oil manager. Photo of the meter.', 'سجّل في إدارة الزيت. صوّر جهاز القياس.', 'Yağ yöneticisine gir. Ölçerin fotoğrafı.'), { course: 'C-FRYER-GGM', station: 'druckfritteuse' }],
   // Schließung / Spätschicht
+  ['close', 'cleaning', 'fryer', L('Pommes-Station reinigen', 'Clean the fries station', 'نظّف محطة البطاطا', 'Patates istasyonunu temizle'),
+    L('Nach freigegebener Anleitung. Foto am Ende.', 'As per approved instructions. Photo at the end.', 'حسب التعليمات المعتمدة. صورة في النهاية.', 'Onaylı talimata göre. Sonunda fotoğraf.'), { photo: 1, station: 'pommes' }],
+  ['close', 'cleaning', 'prep', L('Panierstation reinigen', 'Clean the breading station', 'نظّف محطة التغليف', 'Pane istasyonunu temizle'),
+    L('Reste weg, Behälter spülen, Fläche desinfizieren.', 'Remove leftovers, wash containers, disinfect surface.', 'أزل البقايا واغسل الأوعية وعقّم السطح.', 'Artıkları at, kapları yıka, yüzeyi dezenfekte et.'), { photo: 1, station: 'panieren', sop: 'SOP-SURFACES' }],
   ['close', 'goods', 'box', L('Restware richtig lagern', 'Store leftovers correctly', 'خزّن البقايا بشكل صحيح', 'Kalanları doğru sakla'),
     L('Abdecken, beschriften, kühlen. Sonst entsorgen.', 'Cover, label, chill. Otherwise throw away.', 'غطِّ وضع ملصقًا وبرّد. وإلا فتخلّص منها.', 'Ört, etiketle, soğut. Yoksa at.')],
   ['close', 'cleaning', 'clean', L('Küche reinigen', 'Clean the kitchen', 'نظّف المطبخ', 'Mutfağı temizle'),
@@ -226,6 +234,78 @@ const COURSES = [
         { q: 'Hangi talimat geçerli?', image: 'book', options: ['Orijinal üretici kılavuzu', 'İnternetten bir video', 'Bir arkadaşın söyledikleri'], correct: 0 }] })],
 ];
 
+
+// Stationen mit eigener Stationscheck-Liste (eigene ForHuman-Inhalte). Kritische Punkte müssen immer erfüllt sein.
+// [code, icon, name(L), sop, course, items: [text, critical]]
+const STATIONS = [
+  ['panieren', 'prep', L('Panierstation', 'Breading station', 'محطة التغليف بالبقسماط', 'Pane istasyonu'), null, 'C-HYGIENE', [
+    ['Hände gewaschen, Handschuhe nach Vorgabe gewechselt', 1],
+    ['Rohes Hähnchen strikt getrennt von fertiger Ware und Verpackung', 1],
+    ['Kühlkette eingehalten: Rohware nur kurz ungekühlt, Rest sofort zurück in die Kühlung', 1],
+    ['Panieren genau nach freigegebener Anleitung (Reihenfolge, Menge)', 0],
+    ['Arbeitsplatz vorher vorbereitet und zwischendurch sauber gehalten', 0],
+    ['Utensilien und Behälter nach Vorgabe getauscht und gereinigt', 0],
+    ['Abfall und Verpackung richtig entsorgt', 0]]],
+  ['druckfritteuse', 'fryer', L('Hochdruckfritteuse', 'Pressure fryer', 'قلاية الضغط', 'Basınçlı fritöz'), 'SOP-FRYER-GGM', 'C-FRYER-GGM', [
+    ['Schutzkleidung nach Vorgabe getragen', 1],
+    ['Gerät nur nach freigegebener Herstelleranleitung bedient', 1],
+    ['Sicherheitsfunktionen und Verriegelungen nie umgangen', 1],
+    ['Programm und Timer für das Produkt benutzt', 0],
+    ['Produkt nach Vorgabe geprüft, bevor es in die Warmhaltung geht', 1],
+    ['Ölmessung im Ölmanager dokumentiert', 0],
+    ['Bei Störung sofort gestoppt und Leitung informiert (Frage/Simulation)', 1]]],
+  ['pommes', 'fryer', L('Pommes-Fritteuse', 'Fries fryer', 'قلاية البطاطا', 'Patates fritözü'), null, 'C-HYGIENE', [
+    ['Körbe nicht überfüllt, Öl nicht verspritzt', 1],
+    ['Programm/Timer benutzt', 0],
+    ['Abtropfen lassen, Salz nach Vorgabe', 0],
+    ['Haltezeit-Timer gestartet', 1],
+    ['Arbeitsplatz sauber und trocken (Rutschgefahr)', 1]]],
+  ['burger', 'prep', L('Burger & Wraps', 'Burgers & wraps', 'البرغر واللفائف', 'Burger ve dürüm'), null, 'C-HYGIENE', [
+    ['Hände/Handschuhe nach Vorgabe', 1],
+    ['Aufbau genau nach Bild-Bauplan', 0],
+    ['Nur Ware innerhalb der Haltezeit verwendet', 1],
+    ['Sonderwünsche und Allergene der Bestellung beachtet', 1],
+    ['Fläche zwischendurch gereinigt', 0]]],
+  ['theke', 'store', L('Kasse & Theke', 'Counter', 'الكاشير والكاونتر', 'Kasa ve tezgâh'), null, null, [
+    ['Gast freundlich begrüßt und angesehen', 0],
+    ['Bestellung wiederholt und geprüft', 0],
+    ['Fragen zu Allergenen: richtige Information geholt, nicht geraten', 1],
+    ['Theke und Bildschirme sauber', 0],
+    ['Bon/Rückgeld korrekt', 0]]],
+  ['ausgabe', 'box', L('Packen & Ausgabe', 'Packing & handover', 'التغليف والتسليم', 'Paketleme ve teslim'), null, 'C-HYGIENE', [
+    ['Bestellung vollständig mit Bon abgeglichen', 0],
+    ['Heiß und kalt getrennt verpackt', 0],
+    ['Sonderwünsche/Allergene noch einmal geprüft', 1],
+    ['Nur Ware innerhalb der Haltezeit ausgegeben', 1],
+    ['Tüte/Box sauber verschlossen, Gast/Fahrer freundlich übergeben', 0]]],
+];
+
+// Produkte für Haltezeit-Timer. Zeiten sind leer – nur die Leitung trägt sie mit Quelle ein.
+const PRODUCTS = [
+  [L('Hähnchenteile', 'Chicken pieces', 'قطع الدجاج', 'Tavuk parçaları'), 'fryer', 'druckfritteuse'],
+  [L('Hähnchenfilet / Strips', 'Chicken strips', 'شرائح الدجاج', 'Tavuk şeritleri'), 'fryer', 'druckfritteuse'],
+  [L('Wings', 'Wings', 'أجنحة', 'Kanat'), 'fryer', 'druckfritteuse'],
+  [L('Pommes', 'Fries', 'بطاطا مقلية', 'Patates kızartması'), 'fryer', 'pommes'],
+  [L('Burger-Filet', 'Burger fillet', 'فيليه البرغر', 'Burger fileto'), 'prep', 'burger'],
+];
+
+export function seedStations(db, branchId) {
+  if (db.prepare('SELECT COUNT(*) n FROM stations WHERE branch_id = ?').get(branchId).n) return;
+  tx(db, () => {
+    const insS = db.prepare('INSERT INTO stations (branch_id, code, name, icon, position, sop_id, course_id) VALUES (?,?,?,?,?,?,?)');
+    const insI = db.prepare('INSERT INTO observation_items (station_id, position, text, critical) VALUES (?,?,?,?)');
+    STATIONS.forEach(([code, icon, name, sop, course, items], k) => {
+      const sid = insS.run(branchId, code, JSON.stringify(name), icon, (k + 1) * 10, sop ? idBy(db, 'sops', sop) : null, course ? idBy(db, 'courses', course) : null).lastInsertRowid;
+      items.forEach(([text, crit], i) => insI.run(sid, (i + 1) * 10, JSON.stringify({ de: text }), crit));
+    });
+    const insP = db.prepare('INSERT INTO products (branch_id, name, icon, station_id) VALUES (?,?,?,?)');
+    for (const [name, icon, st] of PRODUCTS) {
+      const sid = db.prepare('SELECT id FROM stations WHERE branch_id = ? AND code = ?').get(branchId, st)?.id ?? null;
+      insP.run(branchId, JSON.stringify(name), icon, sid);
+    }
+  });
+}
+
 export function seedBase(db) {
   tx(db, () => {
     const insBranch = db.prepare('INSERT OR IGNORE INTO branches (code, name) VALUES (?, ?)');
@@ -248,7 +328,7 @@ export function seedBase(db) {
     for (const [code, icon, crit, pass, content] of COURSES) insCourse.run(code, icon, crit, pass, JSON.stringify(content));
   });
   // Startvorlagen je Filiale (Manager kann sie danach ändern, sortieren, abschalten)
-  for (const b of db.prepare('SELECT id FROM branches').all()) seedTemplates(db, b.id);
+  for (const b of db.prepare('SELECT id FROM branches').all()) { seedStations(db, b.id); seedTemplates(db, b.id); }
 }
 
 function idBy(db, table, code) {
@@ -259,14 +339,15 @@ export function seedTemplates(db, branchId) {
   const has = db.prepare('SELECT COUNT(*) AS n FROM task_templates WHERE branch_id = ?').get(branchId).n;
   if (has) return;
   const ins = db.prepare(`INSERT INTO task_templates (branch_id, shift, position, category, frequency, weekdays, month_day, icon, title, hint,
-    requires_photo, measure_unit, sop_id, required_course_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+    requires_photo, measure_unit, sop_id, required_course_id, station_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
   const pos = { open: 0, run: 0, close: 0 };
   tx(db, () => {
     for (const [shift, cat, icon, title, hint, o = {}] of TEMPLATES) {
       pos[shift] += 10;
       ins.run(branchId, shift, pos[shift], cat, o.freq || 'daily', o.weekdays || '1234567', o.monthDay ?? null, icon,
         JSON.stringify(title), JSON.stringify(hint), o.photo ? 1 : 0, o.unit ?? null,
-        o.sop ? idBy(db, 'sops', o.sop) : null, o.course ? idBy(db, 'courses', o.course) : null);
+        o.sop ? idBy(db, 'sops', o.sop) : null, o.course ? idBy(db, 'courses', o.course) : null,
+        o.station ? db.prepare('SELECT id FROM stations WHERE branch_id = ? AND code = ?').get(branchId, o.station)?.id ?? null : null);
     }
   });
 }
@@ -285,6 +366,8 @@ export function seedDemo(db) {
       trainer: insUser.run('demo.trainer', 'Demo Trainer (fiktiv)', hash, 0).lastInsertRowid,
       empHalle: insUser.run('demo.mitarbeiter.halle', 'Demo Mitarbeiter A (fiktiv)', hash, 0).lastInsertRowid,
       empLeuna: insUser.run('demo.mitarbeiter.leuna', 'Demo Mitarbeiter B (fiktiv)', hash, 0).lastInsertRowid,
+      leadHalle: insUser.run('demo.schichtfuehrer.halle', 'Demo Schichtführer Halle (fiktiv)', hash, 0).lastInsertRowid,
+      empHalle2: insUser.run('demo.mitarbeiter.halle2', 'Demo Mitarbeiter C (fiktiv)', hash, 0).lastInsertRowid,
     };
     const halle = idBy(db, 'branches', 'halle'), leuna = idBy(db, 'branches', 'leuna');
     const mem = db.prepare('INSERT INTO memberships (user_id, branch_id, role) VALUES (?,?,?)');
@@ -294,6 +377,8 @@ export function seedDemo(db) {
     mem.run(users.trainer, leuna, 'trainer');
     mem.run(users.empHalle, halle, 'employee');
     mem.run(users.empLeuna, leuna, 'employee');
+    mem.run(users.leadHalle, halle, 'shift_lead');
+    mem.run(users.empHalle2, halle, 'employee');
     db.prepare("UPDATE sop_versions SET status = 'approved', approved_by = ?, approved_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')").run(users.admin);
 
     // Fiktiver Artikelstamm. GTINs aus dem GS1-Bereich 20-29 (nur für interne Nutzung, kollidiert nie mit echten Produkten), gültige Prüfziffer.
@@ -327,5 +412,32 @@ export function seedDemo(db) {
     const hyg = idBy(db, 'courses', 'C-HYGIENE');
     db.prepare("INSERT INTO exam_attempts (user_id, course_id, course_version, branch_id, lang, score, total, passed, answers) VALUES (?,?,1,?,'de',3,3,1,'[1,0,2]')").run(users.empHalle, hyg, halle);
     db.prepare("INSERT INTO course_progress (user_id, course_id, course_version, lang, steps_done) VALUES (?,?,1,'de',3)").run(users.empHalle, hyg);
+
+    // Stationsfreigaben (fiktiv): Trainer und Schichtführer überall, Mitarbeiter A an Panierstation und Theke.
+    const certify = (userId, stationId, observer) => {
+      const items = db.prepare('SELECT id, critical FROM observation_items WHERE station_id = ?').all(stationId);
+      const oid = db.prepare(`INSERT INTO observations (station_id, branch_id, user_id, observer_id, results, score, total, critical_failed, passed, note)
+        SELECT id, branch_id, ?, ?, ?, ?, ?, 0, 1, 'Demo-Freigabe (fiktiv)' FROM stations WHERE id = ?`)
+        .run(userId, observer, JSON.stringify(items.map((i) => ({ item_id: i.id, ok: true, critical: !!i.critical }))), items.length, items.length, stationId).lastInsertRowid;
+      db.prepare('INSERT INTO station_certifications (user_id, station_id, observation_id, certified_by) VALUES (?,?,?,?)').run(userId, stationId, oid, observer);
+    };
+    for (const st of db.prepare('SELECT id, branch_id FROM stations').all()) {
+      certify(users.trainer, st.id, users.admin);
+      if (st.branch_id === halle) certify(users.leadHalle, st.id, users.trainer);
+    }
+    for (const code of ['panieren', 'theke']) certify(users.empHalle, db.prepare('SELECT id FROM stations WHERE branch_id = ? AND code = ?').get(halle, code).id, users.trainer);
+    for (const uid of [users.leadHalle, users.trainer]) {
+      db.prepare("INSERT INTO exam_attempts (user_id, course_id, course_version, branch_id, lang, score, total, passed, answers) VALUES (?,?,1,?,'de',3,3,1,'[]')").run(uid, hyg, halle);
+    }
+    // Demo-Zeiten: ausdrücklich fiktiv. Echte Werte nur aus Herstellerangabe / freigegebener Rezeptur / HACCP-Plan.
+    const demoTimes = { 'Hähnchenteile': [20, 900], 'Hähnchenfilet / Strips': [20, 300], 'Wings': [20, 600], 'Pommes': [7, 180], 'Burger-Filet': [15, null] };
+    for (const p of db.prepare('SELECT id, name FROM products').all()) {
+      const t = demoTimes[JSON.parse(p.name).de];
+      if (t) db.prepare("UPDATE products SET hold_minutes = ?, cook_seconds = ?, value_source = 'DEMO-Wert (fiktiv) – nicht für den Betrieb' WHERE id = ?").run(t[0], t[1], p.id);
+    }
+    for (const b of [halle, leuna]) {
+      db.prepare("INSERT INTO products (branch_id, name, icon, hold_minutes, value_source) VALUES (?, ?, 'history', 1, 'DEMO-Test (1 Minute, fiktiv)')")
+        .run(b, JSON.stringify({ de: 'DEMO Test-Timer 1 Min', en: 'DEMO test timer 1 min', ar: 'مؤقت تجريبي دقيقة واحدة', tr: 'DEMO test zamanlayıcı 1 dk' }));
+    }
   });
 }

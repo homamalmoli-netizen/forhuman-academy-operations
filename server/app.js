@@ -8,7 +8,8 @@ import {
   loginAllowed, loginFailed, loginSucceeded,
 } from './auth.js';
 import { classifyCode } from '../shared/codes.js';
-import { seedTemplates } from './seed.js';
+import { seedTemplates, seedStations } from './seed.js';
+import { registerStations, stationDashboard, stationAccess, myStationIds } from './stations.js';
 
 export const LANGS = ['de', 'ar', 'en', 'tr'];
 const SHIFTS = ['open', 'run', 'close'];
@@ -63,21 +64,24 @@ function notify(db, branchId, kind, message, ref) {
 function taskView(db, row, lang, user) {
   const title = j(row.title), hint = j(row.hint);
   const q = row.required_course_id ? qualification(db, user.id, row.required_course_id, row.branch_id) : { ok: true };
+  const stationOk = stationAccess(db, user, row.station_id, row.branch_id);
   return {
+    station_id: row.station_id ?? null, station: row.station_name ? pickLang(j(row.station_name), lang) : null,
     id: row.id, status: row.status, shift: row.shift, work_date: row.work_date, position: row.position, icon: row.icon,
     category: row.category, frequency: row.frequency,
     title: pickLang(title, lang), hint: pickLang(hint, lang), title_de: title.de,
     requires_photo: !!row.requires_photo, measure_unit: row.measure_unit, limit_min: row.limit_min, limit_max: row.limit_max,
-    sop_id: row.sop_id, required_course_id: row.required_course_id, qualified: q.ok,
+    sop_id: row.sop_id, required_course_id: row.required_course_id, qualified: q.ok && stationOk, course_ok: q.ok, station_ok: stationOk,
     completed_by: row.completed_by_name ?? null, completed_at: row.completed_at, measured_value: row.measured_value, note: row.note,
     photos: row.photos ? String(row.photos).split(',').map(Number) : [],
   };
 }
 
 const OCC_SELECT = `SELECT o.*, t.title, t.hint, t.icon, t.category, t.frequency, t.requires_photo, t.measure_unit, t.limit_min, t.limit_max,
-  t.sop_id, t.required_course_id, u.display_name AS completed_by_name,
+  t.sop_id, t.required_course_id, t.station_id, s.name AS station_name, s.position AS station_pos, u.display_name AS completed_by_name,
   (SELECT group_concat(e.media_id) FROM task_evidence e WHERE e.occurrence_id = o.id) AS photos
-  FROM task_occurrences o JOIN task_templates t ON t.id = o.template_id LEFT JOIN users u ON u.id = o.completed_by`;
+  FROM task_occurrences o JOIN task_templates t ON t.id = o.template_id LEFT JOIN users u ON u.id = o.completed_by
+  LEFT JOIN stations s ON s.id = t.station_id`;
 
 function stockOf(db, branchId) {
   return db.prepare(`SELECT i.id, i.name, i.unit, i.category, i.metro_article_no, i.needs_temperature,
@@ -150,7 +154,7 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
     const user = needUser(ctx);
     const b = Number(branchId);
     if (!Number.isInteger(b) || !db.prepare('SELECT 1 FROM branches WHERE id = ? AND active = 1').get(b)) throw bad('branch', 'Filiale fehlt');
-    if (!can(user, b, ...(roles.length ? roles : ['employee', 'trainer', 'manager', 'admin']))) throw forbidden();
+    if (!can(user, b, ...(roles.length ? roles : ['employee', 'shift_lead', 'trainer', 'manager', 'admin']))) throw forbidden();
     return b;
   };
   const needAdmin = (ctx) => { const u = needUser(ctx); if (!u.is_admin) throw forbidden(); return u; };
@@ -172,7 +176,7 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
   if (demo) {
     const personas = {
       admin: 'demo.admin', manager_halle: 'demo.leitung.halle', manager_leuna: 'demo.leitung.leuna', trainer: 'demo.trainer',
-      employee_halle: 'demo.mitarbeiter.halle', employee_leuna: 'demo.mitarbeiter.leuna',
+      employee_halle: 'demo.mitarbeiter.halle', employee_leuna: 'demo.mitarbeiter.leuna', shift_lead_halle: 'demo.schichtfuehrer.halle',
     };
     route('POST', '/api/demo/session', (ctx) => {
       const username = personas[ctx.body.persona];
@@ -254,15 +258,32 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
     const rows = db.prepare(`${OCC_SELECT} WHERE o.branch_id = ? AND o.work_date = ? AND o.shift = ?
       ORDER BY CASE o.status WHEN 'rework' THEN 0 ELSE 1 END, o.position`).all(branchId, date, shift);
     const L = lang(ctx);
-    const tasks = rows.map((r) => taskView(db, r, L, u));
+    const mine = myStationIds(db, u.id, branchId, shift);
+    // Struktur: mit Positionsplan sieht die Person nur ihre Stationen + allgemeine Aufgaben, ihre Stationen zuerst
+    let tasks = rows.map((r) => taskView(db, r, L, u));
+    const otherCount = mine.length ? tasks.filter((t) => t.station_id && !mine.includes(t.station_id)).length : 0;
+    if (mine.length) {
+      tasks = tasks.filter((t) => !t.station_id || mine.includes(t.station_id));
+      const rank = (t) => (t.status === 'rework' ? 0 : t.station_id ? 1 : 2);
+      tasks.sort((a, b) => rank(a) - rank(b) || a.position - b.position);
+    }
+    const isDone = (t) => ['done', 'approved'].includes(t.status);
     const actionable = tasks.filter((t) => ['open', 'rework'].includes(t.status));
     const next = actionable.find((t) => t.qualified) || null;
+    const groupMap = new Map();
+    for (const t of tasks) {
+      const key = t.station_id || 0;
+      if (!groupMap.has(key)) groupMap.set(key, { station_id: t.station_id, station: t.station, done: 0, total: 0 });
+      const g = groupMap.get(key); g.total++; if (isDone(t)) g.done++;
+    }
     return {
-      date, shift,
-      total: tasks.length,
-      done: tasks.filter((t) => ['done', 'approved'].includes(t.status)).length,
+      date, shift, my_station_ids: mine,
+      total: tasks.length, done: tasks.filter(isDone).length,
       problems: tasks.filter((t) => t.status === 'problem').length,
-      blocked: actionable.filter((t) => !t.qualified).map((t) => ({ id: t.id, title: t.title, icon: t.icon, required_course_id: t.required_course_id })),
+      other_station_tasks: otherCount,
+      groups: [...groupMap.values()].sort((a, b) => (a.station_id ? 0 : 1) - (b.station_id ? 0 : 1)),
+      blocked: actionable.filter((t) => !t.qualified).map((t) => ({ id: t.id, title: t.title, icon: t.icon, station: t.station,
+        reason: !t.course_ok ? 'course' : 'station', required_course_id: t.required_course_id })),
       next,
     };
   });
@@ -274,6 +295,7 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
     const branchId = needBranch(ctx, row.branch_id);
     if (!['open', 'rework'].includes(row.status)) throw new HttpError(409, 'not_open', 'Aufgabe ist nicht offen');
     if (row.required_course_id && !qualification(db, u.id, row.required_course_id, branchId).ok) throw new HttpError(403, 'not_qualified', 'Schulung oder praktische Freigabe fehlt');
+    if (!stationAccess(db, u, row.station_id, branchId)) throw new HttpError(403, 'not_certified', 'Für diese Station nicht freigegeben');
     const photo = mediaInBranch(ctx.body.media_id, branchId);
     if (row.requires_photo && !photo) throw bad('photo_required', 'Foto ist Pflicht');
     let value = null;
@@ -442,8 +464,8 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
 
   route('GET', '/api/dashboard', (ctx) => {
     const u = needUser(ctx);
-    const ids = ctx.query.get('branch') ? [needBranch(ctx, ctx.query.get('branch'), 'manager', 'trainer', 'admin')]
-      : branchIdsFor(db, u).filter((b) => can(u, b, 'manager', 'trainer', 'admin'));
+    const ids = ctx.query.get('branch') ? [needBranch(ctx, ctx.query.get('branch'), 'manager', 'shift_lead', 'trainer', 'admin')]
+      : branchIdsFor(db, u).filter((b) => can(u, b, 'manager', 'shift_lead', 'trainer', 'admin'));
     if (!ids.length) throw forbidden();
     const date = berlinDate();
     return ids.map((branchId) => {
@@ -466,6 +488,7 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
         unknown_codes: db.prepare("SELECT COUNT(*) n FROM unknown_codes WHERE branch_id = ? AND status = 'open'").get(branchId).n,
         oil: db.prepare('SELECT * FROM fryers WHERE branch_id = ?').all(branchId).map((f) => ({ id: f.id, name: f.name, ...oilStatus(db, f) })),
         notifications: db.prepare('SELECT * FROM notifications WHERE branch_id = ? ORDER BY id DESC LIMIT 10').all(branchId),
+        ...stationDashboard(db, branchId),
       };
     });
   });
@@ -473,8 +496,8 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
   // --- Vorlagen (Manager) ------------------------------------------------------
   route('GET', '/api/templates', (ctx) => {
     const branchId = needBranch(ctx, ctx.query.get('branch'), 'manager', 'admin');
-    return db.prepare('SELECT * FROM task_templates WHERE branch_id = ? ORDER BY shift, position').all(branchId)
-      .map((t) => ({ ...t, title: j(t.title), hint: j(t.hint) }));
+    return db.prepare('SELECT t.*, s.name AS station_name FROM task_templates t LEFT JOIN stations s ON s.id = t.station_id WHERE t.branch_id = ? ORDER BY t.shift, t.position').all(branchId)
+      .map((t) => ({ ...t, title: j(t.title), hint: j(t.hint), station_name: t.station_name ? j(t.station_name).de : null }));
   });
   route('POST', '/api/templates', (ctx) => {
     const u = needUser(ctx);
@@ -482,9 +505,11 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
     const { shift, title_de } = ctx.body;
     if (!SHIFTS.includes(shift) || !String(title_de || '').trim()) throw bad('template', 'Schicht und Titel nötig');
     const pos = (db.prepare('SELECT MAX(position) m FROM task_templates WHERE branch_id = ? AND shift = ?').get(branchId, shift).m || 0) + 10;
-    const id = db.prepare('INSERT INTO task_templates (branch_id, shift, position, category, icon, title, hint, requires_photo) VALUES (?,?,?,?,?,?,?,?)')
+    const st = ctx.body.station_id ? db.prepare('SELECT id FROM stations WHERE id = ? AND branch_id = ?').get(Number(ctx.body.station_id), branchId)?.id : null;
+    if (ctx.body.station_id && !st) throw bad('station');
+    const id = db.prepare('INSERT INTO task_templates (branch_id, shift, position, category, icon, title, hint, requires_photo, station_id) VALUES (?,?,?,?,?,?,?,?,?)')
       .run(branchId, shift, pos, ctx.body.category || 'routine', ctx.body.icon || 'check', JSON.stringify({ de: String(title_de).trim().slice(0, 120) }),
-        JSON.stringify({ de: String(ctx.body.hint_de || '').trim().slice(0, 200) }), ctx.body.requires_photo ? 1 : 0).lastInsertRowid;
+        JSON.stringify({ de: String(ctx.body.hint_de || '').trim().slice(0, 200) }), ctx.body.requires_photo ? 1 : 0, st ?? null).lastInsertRowid;
     audit(db, { actor: u.id, branch: branchId, action: 'create', entity: 'template', id: Number(id), payload: ctx.body });
     return { id: Number(id) };
   });
@@ -497,13 +522,18 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
     if ((b.limit_min != null || b.limit_max != null) && !String(b.limit_source || t.limit_source || '').trim()) {
       throw bad('limit_source', 'Grenzwerte nur mit Quelle (HACCP-Plan / Herstellerangabe)');
     }
-    const fields = { active: b.active != null ? (b.active ? 1 : 0) : t.active, requires_photo: b.requires_photo != null ? (b.requires_photo ? 1 : 0) : t.requires_photo,
+    let stationId = t.station_id;
+    if (b.station_id !== undefined) {
+      stationId = b.station_id === null || b.station_id === '' ? null : Number(b.station_id);
+      if (stationId && !db.prepare('SELECT 1 FROM stations WHERE id = ? AND branch_id = ?').get(stationId, branchId)) throw bad('station');
+    }
+    const fields = { station_id: stationId, active: b.active != null ? (b.active ? 1 : 0) : t.active, requires_photo: b.requires_photo != null ? (b.requires_photo ? 1 : 0) : t.requires_photo,
       weekdays: b.weekdays != null ? String(b.weekdays).replace(/[^1-7]/g, '') || t.weekdays : t.weekdays,
       limit_min: b.limit_min !== undefined ? (b.limit_min === null || b.limit_min === '' ? null : Number(b.limit_min)) : t.limit_min,
       limit_max: b.limit_max !== undefined ? (b.limit_max === null || b.limit_max === '' ? null : Number(b.limit_max)) : t.limit_max,
       limit_source: b.limit_source !== undefined ? String(b.limit_source || '').slice(0, 200) || null : t.limit_source };
-    db.prepare('UPDATE task_templates SET active=?, requires_photo=?, weekdays=?, limit_min=?, limit_max=?, limit_source=? WHERE id = ?')
-      .run(fields.active, fields.requires_photo, fields.weekdays, fields.limit_min, fields.limit_max, fields.limit_source, t.id);
+    db.prepare('UPDATE task_templates SET station_id=?, active=?, requires_photo=?, weekdays=?, limit_min=?, limit_max=?, limit_source=? WHERE id = ?')
+      .run(fields.station_id, fields.active, fields.requires_photo, fields.weekdays, fields.limit_min, fields.limit_max, fields.limit_source, t.id);
     audit(db, { actor: u.id, branch: branchId, action: 'update', entity: 'template', id: t.id, payload: fields });
     return { ok: true };
   });
@@ -604,7 +634,7 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
   route('GET', '/api/training', (ctx) => {
     const branchId = needBranch(ctx, ctx.query.get('branch'), 'trainer', 'manager', 'admin');
     const people = db.prepare(`SELECT DISTINCT u.id, u.display_name FROM memberships m JOIN users u ON u.id = m.user_id
-      WHERE m.branch_id = ? AND m.role = 'employee' AND u.active = 1 ORDER BY u.display_name`).all(branchId);
+      WHERE m.branch_id = ? AND m.role IN ('employee','shift_lead') AND u.active = 1 ORDER BY u.display_name`).all(branchId);
     const courses = db.prepare('SELECT id, code, content, safety_critical FROM courses WHERE active = 1').all();
     return { courses: courses.map((c) => ({ id: c.id, code: c.code, title: j(c.content).de.title, safety_critical: !!c.safety_critical })),
       people: people.map((p) => ({ ...p, status: Object.fromEntries(courses.map((c) => [c.id, qualification(db, p.id, c.id, branchId)])) })) };
@@ -829,7 +859,7 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
     return tx(db, () => {
       const id = Number(db.prepare('INSERT INTO users (username, display_name, password_hash) VALUES (?,?,?)').run(username, String(display_name).slice(0, 80), hashPassword(password)).lastInsertRowid);
       for (const m of memberships) {
-        if (!['manager', 'trainer', 'employee'].includes(m.role) || !db.prepare('SELECT 1 FROM branches WHERE id = ?').get(Number(m.branch_id))) throw bad('membership');
+        if (!['manager', 'shift_lead', 'trainer', 'employee'].includes(m.role) || !db.prepare('SELECT 1 FROM branches WHERE id = ?').get(Number(m.branch_id))) throw bad('membership');
         db.prepare('INSERT OR IGNORE INTO memberships (user_id, branch_id, role) VALUES (?,?,?)').run(id, Number(m.branch_id), m.role);
       }
       audit(db, { actor: a.id, action: 'create', entity: 'user', id, payload: { username, memberships } });
@@ -842,6 +872,7 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
     if (!/^[a-z0-9-]{2,30}$/.test(code) || !name) throw bad('branch', 'Kürzel und Name nötig');
     if (db.prepare('SELECT 1 FROM branches WHERE code = ?').get(code)) throw new HttpError(409, 'duplicate');
     const id = Number(db.prepare('INSERT INTO branches (code, name) VALUES (?,?)').run(code, name.slice(0, 60)).lastInsertRowid);
+    seedStations(db, id);
     seedTemplates(db, id);
     audit(db, { actor: a.id, branch: id, action: 'create', entity: 'branch', id });
     return { id };
@@ -906,6 +937,8 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
     audit(db, { actor: a.id, action: 'settings', entity: 'settings', payload: { photo_retention_days: days } });
     return { ok: true };
   });
+
+  registerStations({ route, db, needUser, needBranch, lang, HttpError, bad, forbidden, notFound, j, pickLang });
 
   // --- Request-Verarbeitung ----------------------------------------------------
   const pubRoot = resolve(publicDir);

@@ -17,6 +17,9 @@ Stand dieses Pull Requests. „Umgesetzt“ heißt: programmiert **und** durch a
 - Demo ohne Login, isoliert (In-Memory, eigener Foto-Ordner); Produktion ohne Demo-Zugang und ohne Standardkonten
 - Sichere Admin-Erstfreigabe per Server-Kommando (Passwort verdeckt)
 - Offline: keine falsche Erfolgsmeldung, Eingaben bleiben auf dem Bildschirm
+- Stationen mit Stationscheck (kritische Punkte), Stationsfreigabe, Stufen 1–5, Rolle Schichtführer
+- Positionsplan je Schicht nur mit freigegebenen Personen bzw. Einarbeitung neben Freigegebenen; Aufgaben nach Station strukturiert
+- Haltezeit-/Garzeit-Timer mit Ablaufwarnung; abgelaufen → nur Entsorgen; Übersicht zählt nicht entsorgte Ware
 
 ## Nicht umgesetzt / bewusst offen
 
@@ -26,6 +29,8 @@ Stand dieses Pull Requests. „Umgesetzt“ heißt: programmiert **und** durch a
 | Abgleich mit dem Replit-Projekt | Kein Zugriff auf das Replit-Projekt aus dieser Sitzung. Dieser Branch ist vom Prototyp in PR #2 abgeleitet und ersetzt ihn vollständig |
 | Echte Videos und Fotos in Schulungen | Müssen vom ForHuman-Team erstellt oder lizenziert werden. Aktuell Symbole statt Fotos |
 | Geräte-Anleitungen (GGM, Frymaster, Henny Penny) | Herstellerhandbücher / genaues GGM-Modell fehlen. Inhalte sind als „Entwurf – nicht zur Anwendung“ markiert; keine Drücke, Temperaturen, Ölwechsel-Schritte erfunden |
+| Haltezeiten und Garzeiten je Produkt | Nur aus Herstellerangabe / freigegebener Rezeptur / HACCP-Plan. In Produktion leer; Demo-Werte sind als fiktiv markiert |
+| Stationscheck-Listen | Eigene Entwürfe von mir (Hygiene, Sicherheit, Ablauf). Bitte fachlich prüfen und an Ihre Abläufe anpassen; Bearbeiten in der App folgt noch (aktuell in `server/seed.js`) |
 | HACCP-Grenzwerte, Öl-Grenzwert (TPM) | Nur aus Ihrem HACCP-Plan bzw. Herstellerangabe. Felder sind vorhanden, standardmäßig leer |
 | Reinigungsmittel-Register (METRO, Dr. Becher), Dosierungen, Sicherheitsdatenblätter (#7, #8) | Konkrete Produkte, Etiketten und SDB fehlen; App verweist auf Etikett/SDB |
 | METRO-Schnittstelle, automatische Belegerkennung (OCR) | Keine verifizierte METRO-API; OCR nicht eingebaut. Beleg wird als Foto/PDF mit Belegnummer gespeichert, Zuordnung manuell |

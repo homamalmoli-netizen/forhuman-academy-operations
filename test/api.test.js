@@ -101,9 +101,10 @@ describe('Demo-Instanz (fiktive Daten)', () => {
     assert.equal((await trainer.post('/api/signoffs', { branch: HALLE, user_id: 5, course_id: fryer.id })).status, 200);
     const after = (await emp.get(`/api/courses?branch=${HALLE}`)).data.find((x) => x.id === fryer.id);
     assert.equal(after.ok, true);
-    // Jetzt ist die Fritteusen-Aufgabe nicht mehr gesperrt
+    // Schulung erledigt – Stationsaufgaben bleiben gesperrt, bis der Stationscheck an der Station bestanden ist
     const d = (await emp.get(`/api/shift/next?branch=${HALLE}&shift=open`)).data;
-    assert.equal(d.blocked.length, 0);
+    assert.ok(d.blocked.length > 0);
+    assert.ok(d.blocked.every((b) => b.reason === 'station'));
   });
 
   test('Problem melden → Manager fordert Nacharbeit → Aufgabe erscheint zuerst → erledigt → Manager bestätigt', async () => {
@@ -131,6 +132,19 @@ describe('Demo-Instanz (fiktive Daten)', () => {
 
   test('Schließung komplett, Schichtbericht und Managerfreigabe', async () => {
     const emp = await srv.client().as('employee_leuna');
+    // Mitarbeiter B braucht Hygiene-Schulung und Stationscheck für die Stationen der Schließung
+    const hyg = (await emp.get(`/api/courses?branch=${LEUNA}`)).data.find((c) => c.code === 'C-HYGIENE');
+    for (let i = 0; i < hyg.steps; i++) await emp.post(`/api/courses/${hyg.id}/progress`, { lang: 'de', step: i });
+    assert.equal((await emp.post(`/api/courses/${hyg.id}/exam`, { branch: LEUNA, lang: 'de', answers: [1, 0, 2] })).data.passed, true);
+    const trainer = await srv.client().as('trainer');
+    const empId = (await emp.get('/api/me')).data.id;
+    const stations = (await emp.get(`/api/stations?branch=${LEUNA}`)).data.stations;
+    for (const code of ['pommes', 'panieren']) {
+      const st = stations.find((x) => x.code === code);
+      const cl = (await trainer.get(`/api/stations/${st.id}/checklist`)).data;
+      const r = await trainer.post('/api/observations', { branch: LEUNA, station_id: st.id, user_id: empId, results: cl.items.map((i) => ({ item_id: i.id, ok: true })) });
+      assert.equal(r.data.passed, true, JSON.stringify(r.data));
+    }
     const left = await completeAll(emp, LEUNA, 'close');
     assert.equal(left, null);
     const mgr = await srv.client().as('manager_leuna');
