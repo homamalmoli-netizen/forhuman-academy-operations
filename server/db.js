@@ -726,6 +726,14 @@ const MIGRATIONS = [
     UNIQUE (user_id, module_id, branch_id)
   );
   `,
+  // 9: Mitgelieferte Fragen bekommen einen festen Schlüssel, damit neue Fragen auch in bestehende Datenbanken kommen,
+  //    ohne vom Betreiber gelöschte oder geänderte Fragen wieder einzuspielen.
+  `
+  ALTER TABLE train_questions ADD COLUMN seed_key TEXT;
+  UPDATE train_questions SET seed_key = (SELECT a.code || ':' || m.level || ':' || (train_questions.position - 1)
+    FROM train_modules m JOIN train_areas a ON a.id = m.area_id WHERE m.id = train_questions.module_id) WHERE updated_by IS NULL;
+  CREATE UNIQUE INDEX idx_tq_seed ON train_questions(seed_key) WHERE seed_key IS NOT NULL;
+  `,
 ];
 
 export function openDb(file = ':memory:') {

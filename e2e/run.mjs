@@ -112,9 +112,8 @@ try {
   await step('Sprachwechsel Arabisch: RTL und übersetzte Aufgabe', async () => {
     await p.selectOption('select[data-change=lang]', 'ar');
     await p.waitForFunction(() => document.documentElement.dir === 'rtl');
-    await p.locator('.task-title').waitFor();
-    const title = await p.locator('.task-title').innerText();
-    assert.match(title, /[؀-ۿ]/);
+    // auf die neu gerenderte, übersetzte Karte warten (nicht den alten deutschen Stand lesen)
+    await p.waitForFunction(() => /[\u0600-\u06FF]/.test(document.querySelector('.task-title')?.textContent || ''), null, { timeout: 15000 });
     await shot(p, '07-arabisch-rtl');
     await p.selectOption('select[data-change=lang]', 'tr');
     await p.waitForFunction(() => document.documentElement.dir === 'ltr');
@@ -558,7 +557,7 @@ try {
     await p.click('button[data-action=train-start]');
     await p.locator('form[data-submit=train-exam] fieldset').first().waitFor();
     const n = await p.locator('form[data-submit=train-exam] fieldset').count();
-    assert.equal(n, 10);
+    assert.equal(n, 20);
     await shot(p, '53-schulung-pruefung');
     for (let i = 0; i < n; i++) await p.locator(`input[name=q${i}]`).first().check();
     await p.click('form[data-submit=train-exam] button.primary');

@@ -7,6 +7,7 @@ import { tx, audit } from './db.js';
 import { can } from './auth.js';
 import { AREAS, LEVELS } from './training-content.js';
 import { MORE_QUESTIONS } from './training-content-2.js';
+import { LEVEL1_MORE } from './training-content-3.js';
 import { HANDBOOK } from './handbook.js';
 
 export const POOL_TARGET = 20;     // Ziel je Stufe
@@ -30,7 +31,7 @@ export function seedTraining(db) {
   tx(db, () => {
     const insA = db.prepare('INSERT OR IGNORE INTO train_areas (code, icon, position, title, stations) VALUES (?,?,?,?,?)');
     AREAS.forEach((a, i) => insA.run(a.code, a.icon, i + 1, JSON.stringify(a.title), a.stations.join(',')));
-    const insQ = db.prepare('INSERT INTO train_questions (module_id, position, safety, content) VALUES (?,?,?,?)');
+    const insQ = db.prepare('INSERT OR IGNORE INTO train_questions (module_id, position, safety, content, seed_key) VALUES (?,?,?,?,?)');
     for (const a of AREAS) {
       const areaId = db.prepare('SELECT id FROM train_areas WHERE code = ?').get(a.code).id;
       a.levels.forEach((lv, i) => {
@@ -41,10 +42,10 @@ export function seedTraining(db) {
           mod = { id: Number(db.prepare('INSERT INTO train_modules (area_id, level, content, open_points, practical_required) VALUES (?,?,?,?,?)')
             .run(areaId, level, JSON.stringify(content), JSON.stringify(lv.open || []), 1).lastInsertRowid) };
         }
-        // Fragen nur in leere Module einspielen – vom Betreiber gepflegte Fragen bleiben unberührt
-        if (db.prepare('SELECT COUNT(*) n FROM train_questions WHERE module_id = ?').get(mod.id).n) return;
-        const list = [...lv.questions, ...(MORE_QUESTIONS[a.code]?.[level] || [])];
-        list.forEach(([safety, langs], k) => insQ.run(mod.id, k + 1, safety, JSON.stringify(toContent(langs))));
+        // Jede mitgelieferte Frage hat einen festen Schlüssel (Bereich:Stufe:Nr.). Vorhandene Schlüssel werden nie
+        // überschrieben – auch nicht, wenn der Betreiber die Frage geändert oder archiviert hat. Neue Fragen nur anhängen.
+        const list = [...lv.questions, ...(level === 1 ? LEVEL1_MORE[a.code] || [] : MORE_QUESTIONS[a.code]?.[level] || [])];
+        list.forEach(([safety, langs], k) => insQ.run(mod.id, k + 1, safety, JSON.stringify(toContent(langs)), `${a.code}:${level}:${k}`));
       });
     }
   });

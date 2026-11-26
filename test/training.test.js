@@ -39,7 +39,7 @@ describe('Schulungsbereiche: 10 Bereiche × 3 Stufen, Prüfung, Freigabe, Zertif
     const a = (await emp.post(`/api/train/modules/${L1()}/start`, { branch: HALLE, lang: 'de' })).data.attempt_id;
     const b = (await emp.post(`/api/train/modules/${L1()}/start`, { branch: HALLE, lang: 'de' })).data.attempt_id;
     const qa = (await emp.get(`/api/train/attempts/${a}?lang=de`)).data;
-    assert.equal(qa.questions.length, 10);
+    assert.equal(qa.questions.length, 20);
     assert.ok(!JSON.stringify(qa).includes('explain'));
     assert.ok(qa.questions.every((q) => !('correct' in q) && !('right' in q)));
     const pa = srv.db.prepare('SELECT plan FROM train_attempts WHERE id = ?').get(a).plan;
@@ -54,7 +54,7 @@ describe('Schulungsbereiche: 10 Bereiche × 3 Stufen, Prüfung, Freigabe, Zertif
     const wrongIdx = k.findIndex((x) => x.safety);
     const answers = k.map((x, i) => (i === wrongIdx ? (x.right + 1) % 3 : x.right));
     const r = (await emp.post(`/api/train/attempts/${id}/submit`, { answers, lang: 'de' })).data;
-    assert.equal(r.score, 9);
+    assert.equal(r.score, 19);
     assert.equal(r.safety_ok, false);
     assert.equal(r.passed, false);
     const wrong = r.results.find((x) => !x.correct);
@@ -65,10 +65,10 @@ describe('Schulungsbereiche: 10 Bereiche × 3 Stufen, Prüfung, Freigabe, Zertif
   test('unter 80 % → nicht bestanden; Wiederholen und alles richtig → bestanden, wartet auf Praxis-Freigabe', async () => {
     let id = (await emp.post(`/api/train/modules/${L1()}/start`, { branch: HALLE })).data.attempt_id;
     let k = key(srv.db, id);
-    // drei Nicht-Sicherheitsfragen falsch → 7/10
+    // fünf Nicht-Sicherheitsfragen falsch → 15/20 = 75 %
     let n = 0;
-    const answers = k.map((x) => (!x.safety && n++ < 3 ? (x.right + 1) % 3 : x.right));
-    assert.ok(n >= 3);
+    const answers = k.map((x) => (!x.safety && n++ < 5 ? (x.right + 1) % 3 : x.right));
+    assert.ok(n >= 5);
     let r = (await emp.post(`/api/train/attempts/${id}/submit`, { answers })).data;
     assert.equal(r.passed, false); assert.equal(r.safety_ok, true);
     id = (await emp.post(`/api/train/modules/${L1()}/start`, { branch: HALLE })).data.attempt_id;
@@ -121,6 +121,19 @@ describe('Schulungsbereiche: 10 Bereiche × 3 Stufen, Prüfung, Freigabe, Zertif
     // Fragen ohne arabische Übersetzung fallen auf Deutsch zurück
     const id = (await emp.post(`/api/train/modules/${m}/start`, { branch: HALLE, lang: 'ar' })).data.attempt_id;
     assert.equal((await emp.get(`/api/train/attempts/${id}?lang=ar`)).data.questions.length, 5);
+  });
+
+  test('Mitgelieferte Fragen: neuer Seed ergänzt fehlende, überschreibt keine geänderten oder archivierten', async () => {
+    const { seedTraining } = await import('../server/training.js');
+    const m = L1();
+    const q = srv.db.prepare('SELECT id FROM train_questions WHERE module_id = ? ORDER BY position LIMIT 1').get(m);
+    await admin.req('PUT', `/api/train/questions/${q.id}`, { status: 'archived' });
+    const before = srv.db.prepare('SELECT COUNT(*) n FROM train_questions').get().n;
+    srv.db.prepare("DELETE FROM train_questions WHERE seed_key = 'fleisch:1:19'").run();
+    seedTraining(srv.db);
+    assert.equal(srv.db.prepare('SELECT COUNT(*) n FROM train_questions').get().n, before);
+    assert.equal(srv.db.prepare('SELECT status FROM train_questions WHERE id = ?').get(q.id).status, 'archived');
+    await admin.req('PUT', `/api/train/questions/${q.id}`, { status: 'active' });
   });
 
   test('Hilfe „Wie mache ich das?“ findet Schulung, Handbuch und Anleitungen', async () => {
