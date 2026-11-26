@@ -110,9 +110,9 @@ describe('Schulungsbereiche: 10 Bereiche × 3 Stufen, Prüfung, Freigabe, Zertif
       assert.equal(r.status, 200);
     }
     const ed = (await admin.get(`/api/train/modules/${m}/edit`)).data;
-    assert.equal(ed.questions.length, 10); assert.equal(ed.video_url, 'https://example.org/video');
-    // 6 Fragen auf „offen“ → 4 aktive < 5 → noch nicht prüfbar
-    for (const q of ed.questions.slice(0, 6)) assert.equal((await admin.req('PUT', `/api/train/questions/${q.id}`, { status: 'open' })).status, 200);
+    assert.equal(ed.questions.length, 25); assert.equal(ed.video_url, 'https://example.org/video');
+    // alle bis auf 4 Fragen auf „offen“ → 4 aktive < 5 → noch nicht prüfbar
+    for (const q of ed.questions.slice(0, ed.questions.length - 4)) assert.equal((await admin.req('PUT', `/api/train/questions/${q.id}`, { status: 'open' })).status, 200);
     assert.equal((await emp.get(`/api/train/modules/${m}?branch=${HALLE}`)).data.state, 'preparing');
     assert.equal((await emp.post(`/api/train/modules/${m}/start`, { branch: HALLE })).data.error, 'not_ready');
     await admin.req('PUT', `/api/train/questions/${ed.questions[0].id}`, { status: 'active' });
