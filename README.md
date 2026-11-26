@@ -77,3 +77,13 @@ Symbole: Material Design Icons (Google, Apache License 2.0).
 - Von der Leitung direkt gesetzte Startpasswörter müssen beim ersten Login geändert werden.
 - **Nachweise:** Belehrung nach §43 IfSG, METRO-Hygieneschulung, Folgebelehrungen. Upload als Foto/PDF, privat (nur Person, Leitung, Betreiber). Leitung bestätigt oder lehnt mit Begründung ab; keine Selbstprüfung.
 - Die METRO-Schulung ersetzt die §43-Belehrung nicht. Fristen für Folgebelehrungen sind **nicht** fest eingebaut – bitte mit dem Fachberater festlegen. Offizielle Links pflegt der Betreiber.
+
+## Schulungsbereiche (Block 3)
+- 10 Bereiche (Fleisch & Hähnchen, Küche, Lager & Wareneingang, Inventur, Öl/Filter/Geräte, Reinigung & HACCP, Burger/Wraps/Menüs, Verpackung & Ausgabe, Verkaufstheke, Ladenbetrieb) × 3 Stufen (Grundlagen, Praxis, Verantwortung), Texte in DE/EN/AR.
+- Prüfung: bis zu 20 Fragen je Stufe. Fragen und Antworten mischt der Server, die Lösungen gehen nicht an den Browser. Bestanden ab 80 % und nur, wenn **alle Sicherheitsfragen richtig** sind. Falsche Antworten werden mit der richtigen Antwort und einer Erklärung angezeigt. Wiederholen ist jederzeit möglich.
+- Die nächste Stufe wird erst nach bestandener Prüfung frei. Danach folgt die praktische Freigabe durch Trainer oder Leitung (nie durch die Person selbst) und dann das Zertifikat mit Prüfcode.
+- Jeder Bereich zeigt die zugehörigen Stationen. Die Leitung sieht eine Übersicht aller Mitarbeiter und Bereiche mit der höchsten zertifizierten Stufe.
+- „Wie mache ich das?“ durchsucht Schulungen, das Handbuch und freigegebene Anleitungen.
+- Der Betreiber bearbeitet Lernschritte, Video-Link (nur https), offene Punkte und Fragen (Status aktiv, offen oder archiviert) und markiert geprüfte Übersetzungen.
+
+**Ehrlicher Stand der Inhalte:** In Stufe 1 hat jeder Bereich 10 allgemeine Fragen (zusammen 100, davon 40 Sicherheitsfragen). Stufen 2 und 3 haben Lernschritte und eine Liste offener Punkte, aber noch keine Fragen. Ihre Prüfung zeigt „in Vorbereitung“, bis mindestens 5 Fragen freigegeben sind. Rezepte, Garzeiten, Geräteabläufe und Grenzwerte sind bewusst **nicht** erfunden; sie stehen als offene Punkte im Modul. Die Übersetzungen ins Englische und Arabische sind Entwürfe und müssen fachlich geprüft werden.

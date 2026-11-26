@@ -649,6 +649,83 @@ const MIGRATIONS = [
   );
   CREATE INDEX idx_cert_user ON certificates(user_id, type);
   `,
+  // 8: Schulungsbereiche (10 Bereiche × 3 Stufen), Fragenpool mit Sicherheitsfragen, Prüfungsversuche mit Zufallsreihenfolge,
+  //    praktische Freigabe, Zertifikate. Inhalte und Fragen pflegt der Betreiber.
+  `
+  CREATE TABLE train_areas (
+    id INTEGER PRIMARY KEY,
+    code TEXT NOT NULL UNIQUE,
+    icon TEXT NOT NULL DEFAULT 'school',
+    position INTEGER NOT NULL,
+    title TEXT NOT NULL,                 -- JSON je Sprache
+    stations TEXT NOT NULL DEFAULT '',   -- Stations-Codes (Komma), für die der Bereich Voraussetzung ist
+    active INTEGER NOT NULL DEFAULT 1
+  );
+  CREATE TABLE train_modules (
+    id INTEGER PRIMARY KEY,
+    area_id INTEGER NOT NULL REFERENCES train_areas(id),
+    level INTEGER NOT NULL CHECK (level BETWEEN 1 AND 3),
+    content TEXT NOT NULL,               -- JSON je Sprache: {steps:[text]}
+    video_url TEXT CHECK (video_url IS NULL OR video_url LIKE 'https://%'),
+    open_points TEXT NOT NULL DEFAULT '[]',
+    practical_required INTEGER NOT NULL DEFAULT 1,
+    reviewed_langs TEXT NOT NULL DEFAULT 'de',
+    version INTEGER NOT NULL DEFAULT 1,
+    updated_by INTEGER REFERENCES users(id),
+    updated_at TEXT,
+    UNIQUE (area_id, level)
+  );
+  CREATE TABLE train_questions (
+    id INTEGER PRIMARY KEY,
+    module_id INTEGER NOT NULL REFERENCES train_modules(id),
+    position INTEGER NOT NULL,
+    safety INTEGER NOT NULL DEFAULT 0,   -- Sicherheits-/Hygienefrage: muss richtig sein
+    content TEXT NOT NULL,               -- JSON je Sprache: {q, options:[richtig, falsch...], explain}
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','open','archived')),
+    updated_by INTEGER REFERENCES users(id),
+    updated_at TEXT
+  );
+  CREATE INDEX idx_tq_module ON train_questions(module_id, status);
+  CREATE TABLE train_attempts (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    module_id INTEGER NOT NULL REFERENCES train_modules(id),
+    module_version INTEGER NOT NULL,
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    lang TEXT NOT NULL,
+    plan TEXT NOT NULL,                  -- JSON: [{q: id, order: [Antwort-Indizes]}]
+    started_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    submitted_at TEXT,
+    answers TEXT,
+    score INTEGER,
+    total INTEGER,
+    safety_ok INTEGER,
+    passed INTEGER
+  );
+  CREATE INDEX idx_ta_user ON train_attempts(user_id, module_id);
+  CREATE TABLE train_signoffs (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    module_id INTEGER NOT NULL REFERENCES train_modules(id),
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    signed_by INTEGER NOT NULL REFERENCES users(id),
+    note TEXT,
+    signed_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    UNIQUE (user_id, module_id, branch_id),
+    CHECK (user_id <> signed_by)
+  );
+  CREATE TABLE train_certificates (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    module_id INTEGER NOT NULL REFERENCES train_modules(id),
+    module_version INTEGER NOT NULL,
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    attempt_id INTEGER NOT NULL REFERENCES train_attempts(id),
+    code TEXT NOT NULL UNIQUE,
+    issued_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    UNIQUE (user_id, module_id, branch_id)
+  );
+  `,
 ];
 
 export function openDb(file = ':memory:') {
