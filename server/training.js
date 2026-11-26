@@ -6,6 +6,7 @@ import { randomBytes, randomInt } from 'node:crypto';
 import { tx, audit } from './db.js';
 import { can } from './auth.js';
 import { AREAS, LEVELS } from './training-content.js';
+import { MORE_QUESTIONS } from './training-content-2.js';
 import { HANDBOOK } from './handbook.js';
 
 export const POOL_TARGET = 20;     // Ziel je Stufe
@@ -23,23 +24,27 @@ function shuffle(a) {
   return r;
 }
 
+const toContent = (langs) => Object.fromEntries(Object.entries(langs).map(([L, [q, ...rest]]) => [L, { q, options: rest.slice(0, -1), explain: rest[rest.length - 1] }]));
+
 export function seedTraining(db) {
   tx(db, () => {
     const insA = db.prepare('INSERT OR IGNORE INTO train_areas (code, icon, position, title, stations) VALUES (?,?,?,?,?)');
     AREAS.forEach((a, i) => insA.run(a.code, a.icon, i + 1, JSON.stringify(a.title), a.stations.join(',')));
+    const insQ = db.prepare('INSERT INTO train_questions (module_id, position, safety, content) VALUES (?,?,?,?)');
     for (const a of AREAS) {
       const areaId = db.prepare('SELECT id FROM train_areas WHERE code = ?').get(a.code).id;
       a.levels.forEach((lv, i) => {
         const level = i + 1;
-        if (db.prepare('SELECT 1 FROM train_modules WHERE area_id = ? AND level = ?').get(areaId, level)) return;
-        const content = Object.fromEntries(LANGS.map((L) => [L, { steps: lv.steps[L] || [] }]));
-        const mid = Number(db.prepare('INSERT INTO train_modules (area_id, level, content, open_points, practical_required) VALUES (?,?,?,?,?)')
-          .run(areaId, level, JSON.stringify(content), JSON.stringify(lv.open || []), 1).lastInsertRowid);
-        const insQ = db.prepare('INSERT INTO train_questions (module_id, position, safety, content) VALUES (?,?,?,?)');
-        lv.questions.forEach(([safety, langs], k) => {
-          const c = Object.fromEntries(Object.entries(langs).map(([L, [q, ...rest]]) => [L, { q, options: rest.slice(0, -1), explain: rest[rest.length - 1] }]));
-          insQ.run(mid, k + 1, safety, JSON.stringify(c));
-        });
+        let mod = db.prepare('SELECT id FROM train_modules WHERE area_id = ? AND level = ?').get(areaId, level);
+        if (!mod) {
+          const content = Object.fromEntries(LANGS.map((L) => [L, { steps: lv.steps[L] || [] }]));
+          mod = { id: Number(db.prepare('INSERT INTO train_modules (area_id, level, content, open_points, practical_required) VALUES (?,?,?,?,?)')
+            .run(areaId, level, JSON.stringify(content), JSON.stringify(lv.open || []), 1).lastInsertRowid) };
+        }
+        // Fragen nur in leere Module einspielen – vom Betreiber gepflegte Fragen bleiben unberührt
+        if (db.prepare('SELECT COUNT(*) n FROM train_questions WHERE module_id = ?').get(mod.id).n) return;
+        const list = [...lv.questions, ...(MORE_QUESTIONS[a.code]?.[level] || [])];
+        list.forEach(([safety, langs], k) => insQ.run(mod.id, k + 1, safety, JSON.stringify(toContent(langs))));
       });
     }
   });

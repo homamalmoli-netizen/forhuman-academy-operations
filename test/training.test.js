@@ -77,8 +77,8 @@ describe('Schulungsbereiche: 10 Bereiche × 3 Stufen, Prüfung, Freigabe, Zertif
     assert.equal(r.passed, true); assert.equal(r.needs_practical, true); assert.equal(r.certificate, null);
     const st = (await emp.get(`/api/train?branch=${HALLE}`)).data[0];
     assert.equal(st.levels[0].state, 'needs_practical');
-    assert.equal(st.levels[1].state, 'preparing', 'Stufe 2 entsperrt, aber noch ohne Fragenpool');
-    assert.equal((await emp.post(`/api/train/modules/${L2()}/start`, { branch: HALLE })).data.error, 'not_ready');
+    assert.equal(st.levels[1].state, 'open', 'Stufe 2 nach bestandener Stufe 1 entsperrt');
+    assert.equal(st.levels[2].state, 'locked');
   });
 
   test('Praktische Freigabe: nur Trainer/Leitung, nicht selbst; dann Zertifikat und Übersicht', async () => {
@@ -110,11 +110,12 @@ describe('Schulungsbereiche: 10 Bereiche × 3 Stufen, Prüfung, Freigabe, Zertif
       assert.equal(r.status, 200);
     }
     const ed = (await admin.get(`/api/train/modules/${m}/edit`)).data;
-    assert.equal(ed.questions.length, 5); assert.equal(ed.video_url, 'https://example.org/video');
-    assert.equal((await admin.req('PUT', `/api/train/questions/${ed.questions[4].id}`, { status: 'open' })).status, 200);
-    // 4 aktive < 5 → noch nicht prüfbar
+    assert.equal(ed.questions.length, 10); assert.equal(ed.video_url, 'https://example.org/video');
+    // 6 Fragen auf „offen“ → 4 aktive < 5 → noch nicht prüfbar
+    for (const q of ed.questions.slice(0, 6)) assert.equal((await admin.req('PUT', `/api/train/questions/${q.id}`, { status: 'open' })).status, 200);
     assert.equal((await emp.get(`/api/train/modules/${m}?branch=${HALLE}`)).data.state, 'preparing');
-    await admin.req('PUT', `/api/train/questions/${ed.questions[4].id}`, { status: 'active' });
+    assert.equal((await emp.post(`/api/train/modules/${m}/start`, { branch: HALLE })).data.error, 'not_ready');
+    await admin.req('PUT', `/api/train/questions/${ed.questions[0].id}`, { status: 'active' });
     const st = (await emp.get(`/api/train/modules/${m}?branch=${HALLE}&lang=ar`)).data;
     assert.equal(st.state, 'open'); assert.equal(st.video_url, 'https://example.org/video');
     // Fragen ohne arabische Übersetzung fallen auf Deutsch zurück
