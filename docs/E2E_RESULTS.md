@@ -1,6 +1,6 @@
 # End-to-End-Ergebnis
 
-Ausgeführt: 2026-11-25T12:49:20.193Z · Chrome · Handy-Ansicht 390×844
+Ausgeführt: 2026-11-25T13:24:11.175Z · Chrome · Handy-Ansicht 390×844
 
 - ✅ Startseite: Sprache wählen und Demo ohne Login
 - ✅ Öffnung: eine Aufgabe pro Bildschirm, Erledigt
@@ -22,8 +22,14 @@ Ausgeführt: 2026-11-25T12:49:20.193Z · Chrome · Handy-Ansicht 390×844
 - ✅ Leitung: Vorlagen-Reihenfolge ändern
 - ✅ Leitung: unbekannten Code zuordnen, Nachbestellliste
 - ✅ Filialtrennung in der Oberfläche: Leitung Leuna sieht nur Leuna
+- ✅ Schichtführer: Positionsplan nur mit freigegebenen Personen
+- ✅ Mitarbeiter: eigene Station oben, Aufgaben nach Station strukturiert
+- ✅ Trainer: Stationscheck – kritischer Punkt nicht erfüllt, dann bestanden
+- ✅ Mitarbeiter: Stufe und Stationen in „Lernen“
+- ✅ Timer: Haltezeit starten, Ablauf → nur Entsorgen
+- ✅ Leitung: Haltezeiten nur mit Quelle
 - ✅ Admin: Anleitung (SOP) mit Prüfstatus und Versionen
 - ✅ Produktion: nur Anmeldung, keine Demo-Buttons, keine Standardkonten
 - ✅ Offline: keine falsche Erfolgsmeldung
 
-**23 von 23 bestanden.** Screenshots: `docs/screenshots/`
+**29 von 29 bestanden.** Screenshots: `docs/screenshots/`

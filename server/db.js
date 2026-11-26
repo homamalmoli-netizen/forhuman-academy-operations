@@ -305,6 +305,109 @@ const MIGRATIONS = [
   CREATE TRIGGER audit_no_update BEFORE UPDATE ON audit_log BEGIN SELECT RAISE(ABORT, 'audit_log ist unveränderlich'); END;
   CREATE TRIGGER audit_no_delete BEFORE DELETE ON audit_log BEGIN SELECT RAISE(ABORT, 'audit_log ist unveränderlich'); END;
   `,
+  // 2: Stationen, Stationscheck, Stufen, Positionsplan, Haltezeit-Timer
+  `
+  -- Rolle "shift_lead" (Schichtführer) ergänzen: Tabelle neu anlegen, Daten übernehmen
+  CREATE TABLE memberships_new (
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    role TEXT NOT NULL CHECK (role IN ('manager','shift_lead','trainer','employee')),
+    PRIMARY KEY (user_id, branch_id, role)
+  );
+  INSERT INTO memberships_new SELECT user_id, branch_id, role FROM memberships;
+  DROP TABLE memberships;
+  ALTER TABLE memberships_new RENAME TO memberships;
+
+  CREATE TABLE stations (
+    id INTEGER PRIMARY KEY,
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    code TEXT NOT NULL,
+    name TEXT NOT NULL,                 -- JSON je Sprache
+    icon TEXT NOT NULL DEFAULT 'prep',
+    position INTEGER NOT NULL,
+    sop_id INTEGER REFERENCES sops(id),
+    course_id INTEGER REFERENCES courses(id),   -- Voraussetzung vor dem Stationscheck
+    pass_percent INTEGER NOT NULL DEFAULT 100 CHECK (pass_percent BETWEEN 1 AND 100),
+    active INTEGER NOT NULL DEFAULT 1,
+    UNIQUE (branch_id, code)
+  );
+  CREATE TABLE observation_items (
+    id INTEGER PRIMARY KEY,
+    station_id INTEGER NOT NULL REFERENCES stations(id),
+    position INTEGER NOT NULL,
+    text TEXT NOT NULL,                 -- JSON je Sprache
+    critical INTEGER NOT NULL DEFAULT 0, -- kritischer Punkt: muss immer erfüllt sein
+    active INTEGER NOT NULL DEFAULT 1
+  );
+  CREATE TABLE observations (
+    id INTEGER PRIMARY KEY,
+    station_id INTEGER NOT NULL REFERENCES stations(id),
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    observer_id INTEGER NOT NULL REFERENCES users(id),
+    results TEXT NOT NULL,              -- JSON [{item_id, ok}]
+    score INTEGER NOT NULL,
+    total INTEGER NOT NULL,
+    critical_failed INTEGER NOT NULL,
+    passed INTEGER NOT NULL,
+    note TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    CHECK (user_id <> observer_id)
+  );
+  CREATE TABLE station_certifications (
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    station_id INTEGER NOT NULL REFERENCES stations(id),
+    observation_id INTEGER NOT NULL REFERENCES observations(id),
+    certified_by INTEGER NOT NULL REFERENCES users(id),
+    certified_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    PRIMARY KEY (user_id, station_id),
+    CHECK (user_id <> certified_by)
+  );
+  CREATE TABLE position_plans (
+    id INTEGER PRIMARY KEY,
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    work_date TEXT NOT NULL,
+    shift TEXT NOT NULL CHECK (shift IN ('open','run','close')),
+    created_by INTEGER NOT NULL REFERENCES users(id),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    UNIQUE (branch_id, work_date, shift)
+  );
+  CREATE TABLE position_assignments (
+    plan_id INTEGER NOT NULL REFERENCES position_plans(id),
+    station_id INTEGER NOT NULL REFERENCES stations(id),
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    training INTEGER NOT NULL DEFAULT 0, -- 1 = in Einarbeitung, nur mit freigegebener Person an derselben Station
+    PRIMARY KEY (plan_id, station_id, user_id)
+  );
+  CREATE TABLE products (
+    id INTEGER PRIMARY KEY,
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    name TEXT NOT NULL,                 -- JSON je Sprache
+    icon TEXT NOT NULL DEFAULT 'prep',
+    station_id INTEGER REFERENCES stations(id),
+    hold_minutes INTEGER CHECK (hold_minutes IS NULL OR hold_minutes BETWEEN 1 AND 720),   -- Haltezeit
+    cook_seconds INTEGER CHECK (cook_seconds IS NULL OR cook_seconds BETWEEN 10 AND 7200), -- Garzeit/Programmzeit
+    value_source TEXT,                  -- Pflicht, sobald ein Wert gesetzt ist
+    active INTEGER NOT NULL DEFAULT 1,
+    CHECK ((hold_minutes IS NULL AND cook_seconds IS NULL) OR value_source IS NOT NULL)
+  );
+  CREATE TABLE timers (
+    id INTEGER PRIMARY KEY,
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    product_id INTEGER NOT NULL REFERENCES products(id),
+    kind TEXT NOT NULL CHECK (kind IN ('hold','cook')),
+    started_by INTEGER NOT NULL REFERENCES users(id),
+    started_at TEXT NOT NULL,
+    ends_at TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'running' CHECK (status IN ('running','done','discarded')),
+    ended_by INTEGER REFERENCES users(id),
+    ended_at TEXT
+  );
+  CREATE INDEX idx_timers_branch ON timers(branch_id, status);
+  -- Aufgaben nach Station strukturieren (NULL = Allgemein)
+  ALTER TABLE task_templates ADD COLUMN station_id INTEGER REFERENCES stations(id);
+  CREATE INDEX idx_obs_user ON observations(user_id, station_id);
+  `,
 ];
 
 export function openDb(file = ':memory:') {
