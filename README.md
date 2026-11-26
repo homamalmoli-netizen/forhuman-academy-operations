@@ -70,3 +70,10 @@ test/     API-Tests · e2e/ Browser-Test
 ```
 
 Symbole: Material Design Icons (Google, Apache License 2.0).
+
+## Zugänge & Nachweise (Block 2)
+- Jeder Mitarbeiter bekommt ein eigenes Konto. Die Leitung legt es an und erhält einen **Einladungscode** (7 Tage gültig, nur einmal angezeigt, nur als Hash gespeichert). Die Person meldet sich mit dem Code an und legt ihr Passwort selbst fest (mind. 10 Zeichen).
+- Passwort zurücksetzen = neuer Code; das alte Passwort und alle Sitzungen werden ungültig. Deaktivieren sperrt sofort.
+- Von der Leitung direkt gesetzte Startpasswörter müssen beim ersten Login geändert werden.
+- **Nachweise:** Belehrung nach §43 IfSG, METRO-Hygieneschulung, Folgebelehrungen. Upload als Foto/PDF, privat (nur Person, Leitung, Betreiber). Leitung bestätigt oder lehnt mit Begründung ab; keine Selbstprüfung.
+- Die METRO-Schulung ersetzt die §43-Belehrung nicht. Fristen für Folgebelehrungen sind **nicht** fest eingebaut – bitte mit dem Fachberater festlegen. Offizielle Links pflegt der Betreiber.

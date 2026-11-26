@@ -258,6 +258,40 @@ try {
     await m.locator('.flash.ok', { hasText: 'zugeordnet' }).waitFor();
     await shotFull(m, '22-bestand-codes');
   });
+
+  await step('Zugänge: Leitung legt Konto an, Einladungscode, Mitarbeiter setzt eigenes Passwort', async () => {
+    await m.click('a[href="#/manage/staff"]');
+    await m.fill('form[data-submit=staff-new] input[name=display_name]', 'Neuer Mitarbeiter (fiktiv)');
+    await m.fill('form[data-submit=staff-new] input[name=username]', 'neu.e2e');
+    await m.click('form[data-submit=staff-new] button');
+    const code = (await m.locator('.invite-code').innerText()).trim();
+    assert.match(code, /^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+    await shot(m, '48-zugang-einladungscode');
+    const n = await newPage();
+    await n.goto(D + '/');
+    await n.locator('summary', { hasText: 'Einladungscode' }).click();
+    await n.fill('form[data-submit=redeem] input[name=code]', code);
+    await n.fill('form[data-submit=redeem] input[name=password]', 'mein-sicheres-pw-1');
+    await n.fill('form[data-submit=redeem] input[name=password2]', 'mein-sicheres-pw-1');
+    await n.click('form[data-submit=redeem] button');
+    await n.locator('h1', { hasText: 'Willkommen' }).waitFor();
+    await n.selectOption('form[data-submit=certificate] select[name=type]', 'ifsg43');
+    await n.fill('form[data-submit=certificate] input[name=issued_on]', '2026-11-01');
+    await n.setInputFiles('form[data-submit=certificate] input[data-change=photo]', photoPath);
+    await n.locator('form[data-submit=certificate] .photo-field.ready').waitFor();
+    await n.click('form[data-submit=certificate] button.primary');
+    await n.locator('.flash.ok', { hasText: 'Nachweis gesendet' }).waitFor();
+    await shotFull(n, '49-willkommen-nachweise');
+  });
+
+  await step('Nachweise: Leitung prüft und bestätigt §43-Belehrung', async () => {
+    await m.click('a[href="#/manage/certs"]');
+    const f = m.locator('form[data-submit=cert-review]', { hasText: 'Neuer Mitarbeiter' });
+    await f.waitFor();
+    await shotFull(m, '50-nachweise-pruefen');
+    await f.locator('button[value=approved]').click();
+    await m.locator('.flash.ok').waitFor();
+  });
   assert.deepEqual(m.errors, [], 'JavaScript-Fehler auf der Leitungsseite: ' + m.errors.join('; '));
 
   const l = await newPage();

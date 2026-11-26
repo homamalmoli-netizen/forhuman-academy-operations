@@ -128,10 +128,15 @@ function viewStart() {
         <label>${esc(tr('password'))}<input name="password" type="password" autocomplete="current-password" required></label>
         <button class="primary">${esc(tr('login'))}</button>
       </form></section>`;
+  const inviteForm = `<details class="card"><summary>${icon('lock')} ${esc(tr('invite_login'))}</summary>
+      <form data-submit="redeem" class="form"><label>${esc(tr('invite_code'))}<input name="code" autocomplete="one-time-code" required placeholder="XXXX-XXXX-XXXX"></label>
+        <label>${esc(tr('new_password'))}<input name="password" type="password" autocomplete="new-password" minlength="10" required></label>
+        <label>${esc(tr('repeat_password'))}<input name="password2" type="password" autocomplete="new-password" minlength="10" required></label>
+        <button class="primary">${esc(tr('set_password'))}</button></form></details>`;
   shell(`<div class="start">
       <div class="hero"><img src="/logo.svg" alt="" width="84" height="84"><h1>ForHuman Fried Chicken</h1><p>${esc(tr('app_name'))}</p></div>
       <section class="card"><h2>${icon('lang')} ${esc(tr('choose_lang'))}</h2><div class="lang-grid">${langs}</div></section>
-      ${demo}</div>`, { tabs: false });
+      ${demo}${inviteForm}</div>`, { tabs: false });
 }
 
 // --- Mitarbeiter: eine Aufgabe pro Bildschirm -----------------------------------------
@@ -196,7 +201,7 @@ function photoField(purpose, label) {
   const ready = S.photo && S.photo.purpose === purpose;
   return `<div class="photo-field ${ready ? 'ready' : ''}">
       <label class="photo-btn">${icon('camera')}<span>${esc(ready ? tr('photo_ok') : label || tr('take_photo'))}</span>
-      <input type="file" accept="image/*${purpose === 'receipt' ? ',application/pdf' : ''}" capture="environment" data-change="photo" data-purpose="${purpose}" hidden></label>
+      <input type="file" accept="image/*${purpose === 'receipt' || purpose === 'certificate' ? ',application/pdf' : ''}" ${purpose === 'certificate' ? '' : 'capture="environment"'} data-change="photo" data-purpose="${purpose}" hidden></label>
       ${ready && S.photo.preview ? `<img class="thumb" src="${S.photo.preview}" alt="">` : ''}</div>`;
 }
 
@@ -247,6 +252,7 @@ async function viewLearn() {
   render(__seq, `<section class="card level-card"><small>${esc(tr('level'))}</small>
       <div class="ladder">${ladder.map((l, i) => `<span class="rung ${i < st.level.rank ? 'on' : ''} ${l === st.level.level ? 'current' : ''}">${i + 1}<small>${esc(levelLabel(l))}</small></span>`).join('')}</div>
       <p><b>${esc(levelLabel(st.level.level))}</b> · ${st.level.certified}/${st.level.total} ${esc(tr('my_stations'))}</p></section>
+    <a class="secondary block" href="#/welcome">${icon('user')} ${esc(tr('welcome'))} & Nachweise</a>
     <a class="primary block" href="#/handbook">${icon('book')} ${esc(tr('handbook'))}</a>
     <h2>${icon('store')} ${esc(tr('my_stations'))}</h2>
     <div class="course-list">${st.stations.map((x) => `<div class="course">${icon(x.icon, 'big')}<div><b>${esc(x.name)}</b>${x.sop_id ? `<small><a href="#/sop/${x.sop_id}">${esc(tr('btn_guide'))} →</a></small>` : ''}</div>
@@ -492,6 +498,38 @@ async function viewPest() {
     <h2>${icon('history')} Verlauf</h2><ul class="plain">${d.history.map((h) => `<li>${fmtTime(h.created_at)} · ${esc(h.by)} · ${h.infestation ? `<b class="bad-text">Befall: ${esc(h.areas.filter((a) => a.finding).map((a) => a.area).join(', '))}</b>` : 'kein Befall'}${h.exterminator_needed ? ' · Schädlingsbekämpfer erforderlich' : ''}</li>`).join('') || '<li>–</li>'}</ul>`);
 }
 
+// --- Passwort ändern (erzwungen bei Startpasswort) ----------------------------------------
+function viewPassword() {
+  shell(`<section class="card"><h1>${icon('lock')} ${esc(tr('set_password'))}</h1><p class="banner">${esc(tr('must_change'))}</p>
+    <form data-submit="change-password" class="form"><label>${esc(tr('old_password'))}<input name="old_password" type="password" autocomplete="current-password" required></label>
+      <label>${esc(tr('new_password'))}<input name="new_password" type="password" autocomplete="new-password" minlength="10" required></label>
+      <label>${esc(tr('repeat_password'))}<input name="new_password2" type="password" autocomplete="new-password" minlength="10" required></label>
+      <button class="primary block">${esc(tr('set_password'))}</button></form>
+    <button class="secondary" data-action="logout">${esc(tr('logout'))}</button></section>`, { tabs: false });
+}
+
+// --- Willkommen & Nachweise --------------------------------------------------------------
+async function viewWelcome() {
+  const __seq = renderSeq;
+  let w;
+  try { w = await get(`/api/welcome?branch=${S.branch}`); } catch (e) { return render(__seq, errorBox(e)); }
+  const stBadge = (st) => `<span class="badge ${st.state === 'approved' ? 'ok' : st.state === 'pending' ? 'warn' : 'change'}">${esc(tr('st_' + st.state))}</span>`;
+  const item = (label, st, link) => `<li class="welcome-item ${st.state}"><div><b>${esc(label)}</b> ${stBadge(st)}${st.review_note ? `<br><small class="bad-text">${esc(st.review_note)}</small>` : ''}
+    ${st.state !== 'approved' && link ? `<p class="note">${esc(link.text)}${link.url ? ` <a href="${esc(link.url)}" target="_blank" rel="noopener noreferrer">${esc(tr('official_link'))} →</a>` : ''}</p>` : ''}</div></li>`;
+  render(__seq, `<h1 class="page-title">${icon('user')} ${esc(tr('welcome'))}, ${esc(w.name)}</h1>
+    <section class="card"><h2>${esc(tr('welcome_steps'))}</h2><ul class="plain welcome-list">
+      ${item(tr('cert_ifsg43'), w.ifsg43, w.links.ifsg43)}${item(tr('cert_metro'), w.metro_hygiene, w.links.metro_hygiene)}
+      <li class="welcome-item"><div><b>${esc(tr('handbook'))}</b> <span class="badge ${w.handbook_confirmed ? 'ok' : 'warn'}">${esc(w.handbook_confirmed ? tr('st_approved') : tr('st_missing'))}</span> <a href="#/handbook">→</a></div></li>
+      <li class="welcome-item"><div><b>${esc(tr('open_trainings'))}</b> <span class="badge ${w.open_trainings ? 'warn' : 'ok'}">${w.open_trainings}</span> <a href="#/learn">→</a></div></li></ul>
+      <p class="note">METRO-Hygieneschulung ersetzt die Belehrung nach §43 IfSG nicht.</p></section>
+    <form data-submit="certificate" class="form card"><h2>${icon('camera')} ${esc(tr('cert_upload'))}</h2>
+      <label>Art<select name="type" required><option value="ifsg43">${esc(tr('cert_ifsg43'))}</option><option value="metro_hygiene">${esc(tr('cert_metro'))}</option><option value="other">${esc(tr('cert_other'))}</option></select></label>
+      <div class="grid2"><label>${esc(tr('issued_on'))}<input name="issued_on" type="date" required></label><label>${esc(tr('valid_until_opt'))}<input name="valid_until" type="date"></label></div>
+      ${photoField('certificate', tr('cert_upload') + ' (Foto/PDF)')}
+      <button class="primary block">${esc(tr('send'))}</button></form>
+    <h2>${icon('history')} Meine Nachweise</h2><ul class="plain">${w.certificates.map((c) => `<li>${esc(c.type_label)} · ${esc(c.issued_on || '')} · ${esc(tr('st_' + c.status))}${c.review_note ? ' – ' + esc(c.review_note) : ''}${c.media_id ? ` · <a href="/api/media/${c.media_id}" target="_blank" rel="noopener">ansehen</a>` : ''}</li>`).join('') || '<li>–</li>'}</ul>`);
+}
+
 // --- Mehr ---------------------------------------------------------------------------------
 function viewMore() {
   const __seq = renderSeq;
@@ -643,7 +681,7 @@ async function viewOil() {
 // --- Leitung ----------------------------------------------------------------------------
 function manageNav(active) {
   const items = [['dashboard', 'dash', 'Übersicht'], ['positions', 'store', 'Positionsplan'], ['observe', 'eye', 'Stationscheck'], ['stations', 'star', 'Stationen & Stufen'],
-    ['staffing', 'user', 'Besetzung & Verteilung'], ['week', 'report', 'Wochenbericht'], ['daily', 'box', 'Tagesinventur'], ['onboarding', 'shield', 'Einarbeitung'], ['problems', 'warn', 'Probleme'], ['report', 'report', 'Schichtbericht'], ['templates', 'list', 'Aufgaben-Vorlagen'], ['products', 'history', 'Haltezeiten'],
+    ['staff', 'lock', 'Mitarbeiter & Zugänge'], ['certs', 'shield', 'Nachweise (§43/METRO)'], ['staffing', 'user', 'Besetzung & Verteilung'], ['week', 'report', 'Wochenbericht'], ['daily', 'box', 'Tagesinventur'], ['onboarding', 'shield', 'Einarbeitung'], ['problems', 'warn', 'Probleme'], ['report', 'report', 'Schichtbericht'], ['templates', 'list', 'Aufgaben-Vorlagen'], ['products', 'history', 'Haltezeiten'],
     ['training', 'school', 'Schulung & Freigaben'], ['stock', 'box', 'Bestand & Codes'], ['oil', 'oil', 'Öl-Grenzwerte'], ['audit', 'history', 'Protokoll']];
   if (S.me.is_admin) items.push(['recipes', 'prep', 'Rezepturen (Marinaden)'], ['sops', 'book', 'Anleitungen (SOP)'], ['users', 'user', 'Benutzer & Filialen']);
   const allowed = { dashboard: true, staffing: isShiftLead(), week: isShiftLead(), daily: isShiftLead(), onboarding: isTrainer(), positions: isShiftLead(), observe: isTrainer(), stations: isShiftLead() || isTrainer(), training: isTrainer() || isManager() };
@@ -654,7 +692,7 @@ function manageNav(active) {
 async function viewManage(sub = 'dashboard', arg) {
   const __seq = renderSeq;
   try {
-    const fn = { dashboard: mDashboard, staffing: mStaffing, week: mWeek, recipes: mRecipes, daily: mDaily, onboarding: mOnboarding, positions: mPositions, observe: mObserve, stations: mStations, products: mProducts, problems: mProblems, report: mReport, templates: mTemplates, training: mTraining, stock: mStock, oil: mOil, audit: mAudit, sops: mSops, users: mUsers }[sub] || mDashboard;
+    const fn = { dashboard: mDashboard, staff: mStaff, certs: mCerts, staffing: mStaffing, week: mWeek, recipes: mRecipes, daily: mDaily, onboarding: mOnboarding, positions: mPositions, observe: mObserve, stations: mStations, products: mProducts, problems: mProblems, report: mReport, templates: mTemplates, training: mTraining, stock: mStock, oil: mOil, audit: mAudit, sops: mSops, users: mUsers }[sub] || mDashboard;
     const html = await fn(arg);
     render(__seq, `${manageNav(sub)}<div class="manage">${html}</div>`);
   } catch (e) { render(__seq, `${manageNav(sub)}${errorBox(e)}`); }
@@ -673,6 +711,7 @@ async function mDashboard() {
       <article class="stat"><small>Schulung</small><b>${d.training.qualified}/${d.training.learners * d.training.courses}</b><span>Qualifikationen</span></article>
       <article class="stat ${['overdue', 'due'].includes(d.inventory.state) ? 'bad' : ''}"><small>Inventur ${esc(d.inventory.week)}</small><b>${esc({ done: 'erledigt', due: 'heute', overdue: 'überfällig', upcoming: 'offen' }[d.inventory.state])}</b><span><a href="#/inventory">öffnen →</a> · fällig ${new Date(d.inventory.due_date).toLocaleDateString('de-DE')}</span></article>
       ${['early', 'late'].map((k) => `<article class="stat ${['missed', 'late_done'].includes(d.daily[k].state) ? 'bad' : ''}"><small>Tagesinventur ${k === 'early' ? 'Früh' : 'Spät'} (bis ${esc(d.daily[k].deadline)})</small><b>${esc(DSTATE[d.daily[k].state][0])}</b><span>${d.daily[k].by ? esc(d.daily[k].by) : '<a href="#/manage/daily">ansehen →</a>'}</span></article>`).join('')}
+      <article class="stat ${d.certificates.missing_ifsg43 ? 'bad' : ''}"><small>§43-Nachweis fehlt</small><b>${d.certificates.missing_ifsg43}</b><span>${d.certificates.pending} zur Prüfung · <a href="#/manage/certs">ansehen →</a></span></article>
       <article class="stat ${d.marinade_batches.expired ? 'bad' : ''}"><small>Marinaden-Chargen offen</small><b>${d.marinade_batches.n}</b><span>${d.marinade_batches.expired || 0} Frist abgelaufen · <a href="#/marinade">ansehen →</a></span></article>
       <article class="stat ${d.last_pest_check?.infestation ? 'bad' : ''}"><small>Schädlingskontrolle</small><b>${d.last_pest_check ? (d.last_pest_check.infestation ? 'Befall!' : 'ohne Befund') : '–'}</b><span>${d.last_pest_check ? fmtTime(d.last_pest_check.created_at) : 'noch keine'}</span></article>
       <article class="stat ${d.open_trainings.length ? 'bad' : ''}"><small>Offene Pflichtschulungen</small><b>${d.open_trainings.length}</b><span><a href="#/manage/training">ansehen →</a></span></article>
@@ -698,6 +737,49 @@ async function mDaily() {
       ${r.meat.lines.map((l) => `<tr><td>${esc(l.item)}</td><td>${l.start ?? '–'}</td><td>${l.incoming ?? '–'}</td><td><b>${l.usage ?? '–'}</b></td><td>${l.rest} ${esc(l.unit)}</td><td>${l.marinated ?? '–'}</td><td>${l.unusable ?? '–'}</td></tr>`).join('')}</tbody></table>
       <p class="note">Verbrauch = Anfangsbestand + Zugang (Wareneingang) − Restbestand − nicht verwendbare Ware.</p>` : ''}
     ${isManager() ? `<h2>Fristen</h2><form data-submit="daily-settings" class="inline card"><label>Frühschicht bis<input name="early" type="time" value="${esc(r.deadlines.early)}"></label><label>Spätschicht bis<input name="late" type="time" value="${esc(r.deadlines.late)}"></label><button class="small primary">Speichern</button></form>` : ''}`;
+}
+
+async function mStaff() {
+  const list = await get(`/api/staff?branch=${S.branch}`);
+  const inv = S.lastInvite; S.lastInvite = null;
+  const roleBox = (p, r, label) => `<label class="check"><input type="checkbox" data-change="staff-role" value="${r}" ${p.roles.includes(r) ? 'checked' : ''} ${p.roles.includes('manager') && !S.me.is_admin ? 'disabled' : ''}> ${label}</label>`;
+  const st = { approved: 'ok', pending: 'warn' };
+  return `<h1>${icon('lock')} Mitarbeiter & Zugänge</h1>
+    <p class="note">Jeder Mitarbeiter bekommt einen eigenen Zugang – keine Sammelkonten. Statt eines Passworts erhält die Person einen Einladungscode (7 Tage gültig) und legt ihr Passwort selbst fest.</p>
+    ${inv ? `<section class="card invite-card"><h2>${icon('lock')} Einladungscode für ${esc(inv.name || inv.username || '')}</h2><p class="invite-code">${esc(inv.invite_code)}</p>
+      <p class="note">Benutzer: <b>${esc(inv.username || '')}</b> · gültig bis ${fmtTime(inv.expires_at)}. Persönlich übergeben. Anmeldung: Startseite → „Mit Einladungscode anmelden“. Der Code wird nicht noch einmal angezeigt.</p></section>` : ''}
+    <form data-submit="staff-new" class="form card"><h2>${icon('add')} Neuer Mitarbeiter</h2><div class="grid2">
+      <label>Name<input name="display_name" required></label><label>Benutzername<input name="username" required pattern="[A-Za-z0-9._-]{3,40}" placeholder="vorname.nachname"></label>
+      <label>Rolle<select name="role"><option value="employee">Mitarbeiter</option><option value="shift_lead">Schichtführer</option><option value="trainer">Trainer</option>${S.me.is_admin ? '<option value="manager">Filialleitung</option>' : ''}</select></label></div>
+      <button class="primary">Konto anlegen & Code erzeugen</button></form>
+    <table class="tbl"><thead><tr><th>Mitarbeiter</th><th>Rollen</th><th>Zugang</th><th>§43 / METRO</th><th></th></tr></thead><tbody>
+    ${list.map((p) => `<tr data-user="${p.id}" class="${p.active ? '' : 'inactive-row'}"><td>${esc(p.display_name)}<br><small>${esc(p.username)}</small></td>
+      <td>${roleBox(p, 'employee', 'Mitarbeiter')}${roleBox(p, 'shift_lead', 'Schichtführer')}${roleBox(p, 'trainer', 'Trainer')}${p.roles.includes('manager') ? '<small>Filialleitung</small>' : ''}</td>
+      <td>${!p.active ? '<span class="badge change">deaktiviert</span>' : p.has_password ? '<span class="badge ok">aktiv</span>' : `<span class="badge warn">Einladung offen</span>${p.invite ? `<br><small>bis ${fmtTime(p.invite.expires_at)}</small>` : ''}`}</td>
+      <td><span class="badge ${st[p.ifsg43] || 'change'}">§43 ${esc({ approved: 'ok', pending: 'Prüfung', missing: 'fehlt', rejected: 'abgelehnt', expired: 'abgelaufen' }[p.ifsg43])}</span> <span class="badge ${st[p.metro_hygiene] || ''}">METRO ${esc({ approved: 'ok', pending: 'Prüfung', missing: 'fehlt', rejected: 'abgelehnt', expired: 'abgelaufen' }[p.metro_hygiene])}</span></td>
+      <td>${p.id !== S.me.id && !p.roles.includes('manager') ? `<button class="small" data-action="staff-reset" data-id="${p.id}" data-name="${esc(p.display_name)}">Passwort zurücksetzen</button>
+        <button class="small" data-action="staff-active" data-id="${p.id}" data-val="${p.active ? 0 : 1}">${p.active ? 'deaktivieren' : 'aktivieren'}</button>` : ''}</td></tr>`).join('')}</tbody></table>`;
+}
+
+async function mCerts() {
+  const d = await get(`/api/certificates?branch=${S.branch}`);
+  const lbl = { approved: ['bestätigt', 'ok'], pending: ['in Prüfung', 'warn'], missing: ['fehlt', 'change'], rejected: ['abgelehnt', 'change'], expired: ['abgelaufen', 'change'] };
+  const b = (st) => `<span class="badge ${lbl[st.state][1]}">${lbl[st.state][0]}</span>${st.valid_until ? `<br><small>bis ${new Date(st.valid_until).toLocaleDateString('de-DE')}</small>` : ''}`;
+  return `<h1>${icon('shield')} Nachweise: §43 IfSG & METRO-Hygieneschulung</h1>
+    <p class="note">Gesetzliche Tätigkeitsvoraussetzung: Belehrung nach §43 IfSG vor der ersten Tätigkeit mit Lebensmitteln. Die METRO-Schulung ersetzt sie nicht. Folgebelehrungen durch den Betrieb hier dokumentieren. Fristen bitte mit Ihrem Fachberater festlegen.</p>
+    <h2>Zur Prüfung (${d.pending.length})</h2>
+    ${d.pending.map((c) => `<form data-submit="cert-review" data-id="${c.id}" class="card form"><h3>${esc(c.user)} · ${esc(c.type_label)}</h3>
+      <p>Ausgestellt ${esc(c.issued_on || '–')}${c.valid_until ? ' · gültig bis ' + esc(c.valid_until) : ''} · hochgeladen ${fmtTime(c.uploaded_at)}</p>
+      <a class="secondary" href="/api/media/${c.media_id}" target="_blank" rel="noopener">${icon('eye')} Dokument ansehen</a>
+      <label>Notiz (Pflicht bei Ablehnung)<input name="note"></label>
+      <div class="row"><button class="danger" name="act" value="rejected">Ablehnen</button><button class="primary" name="act" value="approved">Bestätigen</button></div></form>`).join('') || '<p class="note">Nichts zu prüfen.</p>'}
+    <h2>Übersicht</h2><table class="tbl"><thead><tr><th>Mitarbeiter</th><th>§43 IfSG</th><th>METRO</th><th>Letzte Folgebelehrung</th></tr></thead><tbody>
+    ${d.people.map((p) => `<tr><td>${esc(p.display_name)}</td><td>${b(p.ifsg43)}</td><td>${b(p.metro_hygiene)}</td>
+      <td>${p.last_followup ? new Date(p.last_followup).toLocaleDateString('de-DE') : '–'}<form data-submit="cert-followup" data-user="${p.id}" class="inline"><input name="issued_on" type="date" required aria-label="Datum"><button class="small">eintragen</button></form></td></tr>`).join('')}</tbody></table>
+    ${S.me.is_admin ? `<h2>Hinweise & offizielle Links (Betreiber)</h2><form data-submit="cert-links" class="form card">
+      <label>§43: Hinweistext<textarea name="ifsg_text" rows="2">${esc(d.links.ifsg43.text)}</textarea></label><label>§43: Link (https)<input name="ifsg_url" value="${esc(d.links.ifsg43.url)}"></label>
+      <label>METRO: Hinweistext<textarea name="metro_text" rows="2">${esc(d.links.metro_hygiene.text)}</textarea></label><label>METRO: Link (https)<input name="metro_url" value="${esc(d.links.metro_hygiene.url)}"></label>
+      <button class="primary">Speichern</button></form>` : ''}`;
 }
 
 async function mStaffing(arg) {
@@ -971,6 +1053,7 @@ async function mUsers() {
 async function route() {
   renderSeq++;
   if (!S.me) return viewStart();
+  if (S.me.must_change_password) return viewPassword();
   const [, a, b, c, d] = (location.hash || '#/shift').split('/');
   if (!S.me.branches.some((x) => x.id === S.branch)) { S.branch = S.me.branches[0]?.id; localStorage.setItem('fh_branch', S.branch); }
   if (!S.branch) return shell('<section class="card">Keiner Filiale zugeordnet. Bitte Betreiber kontaktieren.</section>', { tabs: false });
@@ -984,6 +1067,7 @@ async function route() {
     case 'handbook': return viewHandbook();
     case 'marinade': return viewMarinade();
     case 'more': return viewMore();
+    case 'welcome': return viewWelcome();
     case 'cleaning': return viewCleaning();
     case 'task': return viewTask(b);
     case 'goods': return viewGoods();
@@ -1022,6 +1106,8 @@ document.addEventListener('click', async (ev) => {
     if (A === 'print') return window.print();
     if (A === 'tpl-move') { await post(`/api/templates/${el.dataset.id}/move`, { dir: el.dataset.dir }); return route(); }
     if (A === 'tpl-photo') { await api('PATCH', `/api/templates/${el.dataset.id}`, { requires_photo: el.dataset.val === '1' }); return route(); }
+    if (A === 'staff-reset') { const r = await post(`/api/staff/${el.dataset.id}/reset`); S.lastInvite = { name: el.dataset.name, ...r }; S.flash = { type: 'ok', text: 'Neuer Code erstellt – altes Passwort ist ungültig.' }; return route(); }
+    if (A === 'staff-active') { await post(`/api/staff/${el.dataset.id}/active`, { active: el.dataset.val === '1' }); S.flash = { type: 'ok', text: tr('saved') }; return route(); }
     if (A === 'presence') { await post('/api/presence', { branch: S.branch, shift: S.shift }); S.flash = { type: 'ok', text: tr('saved') }; return route(); }
     if (A === 'task-start') { await post(`/api/tasks/${el.dataset.id}/start`); return route(); }
     if (A === 'clean-log') { await post('/api/cleaning/log', { branch: S.branch, area: el.dataset.area }); S.flash = { type: 'ok', text: tr('saved') }; return route(); }
@@ -1056,6 +1142,11 @@ document.addEventListener('change', async (ev) => {
   try {
     if (C === 'lang') { setLang(el.value); return route(); }
     if (C === 'branch') { S.branch = Number(el.value); localStorage.setItem('fh_branch', S.branch); return route(); }
+    if (C === 'staff-role') {
+      const row = el.closest('[data-user]');
+      const roles = [...row.querySelectorAll('input[data-change=staff-role]:checked')].map((x) => x.value);
+      await api('PUT', `/api/staff/${row.dataset.user}/roles`, { branch: S.branch, roles }); S.flash = { type: 'ok', text: tr('saved') }; return route();
+    }
     if (C === 'tpl-agent') { await api('PATCH', `/api/templates/${el.dataset.id}`, { cleaning_agent: el.value }); S.flash = { type: 'ok', text: tr('saved') }; return route(); }
     if (C === 'task-assign') { await post(`/api/tasks/${el.dataset.id}/assign`, { user_id: el.value ? Number(el.value) : null }); S.flash = { type: 'ok', text: 'Zuständigkeit geändert' }; return route(); }
     if (C === 'marinade-recipe') { marinadeSel.recipe = el.value; return route(); }
@@ -1092,6 +1183,22 @@ document.addEventListener('submit', async (ev) => {
   try {
     switch (kind) {
       case 'login': await post('/api/login', fd); await loadMe(); location.hash = '#/shift'; break;
+      case 'redeem':
+        if (fd.password !== fd.password2) throw new ApiError(400, { message: tr('passwords_differ') });
+        await post('/api/invite/redeem', { code: fd.code, password: fd.password }); await loadMe(); location.hash = '#/welcome'; break;
+      case 'change-password':
+        if (fd.new_password !== fd.new_password2) throw new ApiError(400, { message: tr('passwords_differ') });
+        await post('/api/password', { old_password: fd.old_password, new_password: fd.new_password }); await loadMe(); S.flash = { type: 'ok', text: tr('saved') }; location.hash = '#/welcome'; break;
+      case 'certificate':
+        await post('/api/certificates', { branch: S.branch, type: fd.type, issued_on: fd.issued_on, valid_until: fd.valid_until, media_id: S.photo?.purpose === 'certificate' ? S.photo.id : undefined });
+        S.photo = null; S.flash = { type: 'ok', text: 'Nachweis gesendet – die Leitung prüft ihn.' }; break;
+      case 'staff-new': {
+        const r = await post('/api/staff', { branch: S.branch, username: fd.username, display_name: fd.display_name, role: fd.role });
+        S.lastInvite = { name: fd.display_name, ...r }; S.flash = { type: 'ok', text: 'Konto angelegt – Einladungscode weitergeben.' }; break;
+      }
+      case 'cert-review': await post(`/api/certificates/${form.dataset.id}/review`, { status: submitter?.value, note: fd.note }); S.flash = { type: 'ok', text: tr('saved') }; break;
+      case 'cert-followup': await post('/api/certificates/followup', { branch: S.branch, user_id: Number(form.dataset.user), issued_on: fd.issued_on }); S.flash = { type: 'ok', text: tr('saved') }; break;
+      case 'cert-links': await api('PUT', '/api/admin/cert-links', { ifsg43: { url: fd.ifsg_url, text: fd.ifsg_text }, metro_hygiene: { url: fd.metro_url, text: fd.metro_text } }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'problem': {
         const body = { description: fd.description, media_id: S.photo?.purpose === 'problem' ? S.photo.id : undefined };
         if (form.dataset.task) await post(`/api/tasks/${form.dataset.task}/problem`, body); else await post('/api/problems', { ...body, branch: S.branch });
