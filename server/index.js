@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { mkdtempSync } from 'node:fs';
 import { openDb } from './db.js';
 import { createApp, purgeExpiredMedia } from './app.js';
+import { runReminders } from './inventory.js';
 import { seedBase, seedDemo } from './seed.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -40,6 +41,11 @@ if (!demo) {
   purgeExpiredMedia(db, uploadDir);
   setInterval(() => purgeExpiredMedia(db, uploadDir), 24 * 3600e3).unref();
 }
+
+// Erinnerungen stündlich prüfen (Inventur fällig/überfällig, offene Pflichtschulungen)
+const reminderRun = () => { for (const b of db.prepare('SELECT id FROM branches WHERE active = 1').all()) { try { runReminders(db, b.id); } catch (e) { console.error('reminder', e); } } };
+reminderRun();
+setInterval(reminderRun, 3600e3).unref();
 
 createServer(handler).listen(port, process.env.HOST || '0.0.0.0', () => {
   console.log(`ForHuman Academy & Operations ${demo ? 'DEMO (fiktive Daten, In-Memory)' : 'PRODUKTION'} auf Port ${port}`);

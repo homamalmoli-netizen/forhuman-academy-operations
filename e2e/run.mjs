@@ -363,6 +363,30 @@ try {
     await m.locator('.flash.error', { hasText: 'Quelle' }).waitFor();
     await shot(m, '33-haltezeiten');
   });
+
+  await step('Wöchentliche Inventur: Erinnerung, unvollständig abgelehnt, vollständig abgeschlossen', async () => {
+    await sl.click('a[href="#/manage/dashboard"]');
+    await sl.locator('.stat', { hasText: 'Inventur' }).waitFor();
+    await sl.locator('li', { hasText: 'Inventur' }).first().waitFor(); // automatische Erinnerung in den Benachrichtigungen
+    await sl.locator('.stat', { hasText: 'Inventur' }).locator('a').click();
+    await sl.locator('form[data-submit=inventory]').waitFor();
+    const inputs = sl.locator('form[data-submit=inventory] input[type=number]');
+    const n = await inputs.count();
+    await inputs.nth(0).fill('20');
+    await sl.click('button[value=submit]');
+    await sl.locator('.flash.error', { hasText: 'Noch nicht gezählt' }).waitFor();
+    for (let i = 1; i < n; i++) await inputs.nth(i).fill(String(10 + i));
+    await shotFull(sl, '34-inventur');
+    await sl.click('button[value=submit]');
+    await sl.locator('.flash.ok', { hasText: 'Inventur' }).waitFor();
+    await sl.locator('.inv-head .badge', { hasText: 'Erledigt' }).waitFor();
+  });
+
+  await step('Mitarbeiter: offene Pflichtschulungen werden auf der Aufgabenseite erinnert', async () => {
+    await p.click('a.tab[href="#/shift"]');
+    await p.locator('.banner-card', { hasText: 'Offene Pflichtschulungen' }).waitFor();
+    await shot(p, '35-erinnerung-schulung');
+  });
   assert.deepEqual(p.errors.concat(sl.errors, tr2.errors), [], 'JavaScript-Fehler: ' + p.errors.concat(sl.errors, tr2.errors).join('; '));
 
   const a = await newPage();

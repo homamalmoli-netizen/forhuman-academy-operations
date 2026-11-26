@@ -32,19 +32,21 @@ Die Demo nutzt eine eigene In-Memory-Datenbank und einen temporären Foto-Ordner
 | Academy | Ablauf nach #9: Sprache selbst wählen → bebilderte Schritte der Reihe nach bestätigen (serverseitig) → Prüfung (inkl. Bildfrage) → Ergebnis mit richtig/falsch → Wiederholen. Gefährliche Geräte zusätzlich **praktische Freigabe durch Trainer** (keine Selbstfreigabe). Aufgaben und Ölmanager sind ohne Qualifikation gesperrt |
 | Anleitungen (SOP) | Versioniert: Entwurf → Freigabe durch Admin; Mitarbeiter sehen nur freigegebene Version. Sicherheitsstatus „Entwurf – nicht zur Anwendung“, bis Herstelleranleitung/Fachfreigabe vorliegt |
 | Wareneingang | Kamera-Scanner (wo der Browser es unterstützt) oder Eingabe; erkennt EAN/GTIN mit Prüfziffer, GS1-Codes mit Charge/MHD, GS1 Digital Link, METRO-Artikelnummern aus dem Artikelstamm; unbekannte Codes → Zuordnung durch Leitung; Links nur nach Bestätigung und nur von erlaubten https-Domains; Menge, Charge, MHD, Temperatur (wo nötig), Zustand, Pflichtfoto, Annahme/Ablehnung |
+| Wöchentliche Inventur | Inventur-Tag je Filiale, automatische Erinnerung (fällig/überfällig), alle zählen mit, Abschluss nur Schichtführer/Leitung und nur vollständig, Abweichungen werden gebucht, Verlauf |
+| Pflichtschulungen | 5 Schulungen (Hygiene, Fritteuse, Wareneingang, Reinigung, Allergene), Gültigkeit einstellbar, wöchentliche Erinnerung an offene/abgelaufene Schulungen |
 | Bestand | Je Filiale über Buchungen (Wareneingang, Verderb, Inventur), Mindestbestand, Nachbestellliste, METRO-Belegnummer gegen Doppelerfassung |
 | Ölmanager | Je Fritteuse: TPM-Messung, Filtern, Wechsel – jeweils mit Pflichtfoto und Verlauf. Status nur aus Messwert + hinterlegtem Grenzwert mit Quelle; **ohne Grenzwert keine Freigabe**, kein Bezug zu Umsatz oder Kasse |
 | Leitung | Übersicht je Filiale, Probleme mit Fotos, Schichtbericht (druckbar) mit Freigabe, Vorlagen sortieren/ändern, Schulungsstatus und Freigaben, Bestand & Codes, Öl-Grenzwerte, unveränderliches Protokoll |
 | Sprachen | Deutsch, Arabisch (RTL), Englisch, Türkisch; ungeprüfte Übersetzungen werden gekennzeichnet; Vorlesen über die Sprachausgabe des Geräts |
 | Sicherheit | Passwörter mit scrypt, Sitzungen nur als Hash gespeichert, Rollen und Filialtrennung **serverseitig**, CSRF-Schutz, Login-Sperre, Upload-Prüfung nach Dateiinhalt, Fotos privat außerhalb des Web-Ordners, Aufbewahrungsfrist für Fotos, Content-Security-Policy |
 
-Was noch fehlt, steht ehrlich in [docs/STATUS.md](docs/STATUS.md).
+Was noch fehlt, steht ehrlich in [docs/STATUS.md](docs/STATUS.md). Prüfbericht zu Aufgaben und Schulungen: [docs/REVIEW.md](docs/REVIEW.md).
 
 ## Tests
 
 ```bash
-npm test     # 35 API- und Logiktests (node:test)
-npm run e2e  # 29 Browser-Abläufe in Chrome (Handy-Ansicht), erzeugt docs/screenshots/ und docs/E2E_RESULTS.md
+npm test     # 43 API- und Logiktests (node:test)
+npm run e2e  # 31 Browser-Abläufe in Chrome (Handy-Ansicht), erzeugt docs/screenshots/ und docs/E2E_RESULTS.md
 ```
 
 ## Echtbetrieb
@@ -54,7 +56,7 @@ Siehe [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) (STRATO VPS, HTTPS, sichere Admin
 ## Aufbau
 
 ```
-server/   index.js (Start) · app.js (API) · stations.js (Stationen, Plan, Timer) · db.js (Schema/Migrationen) · auth.js · seed.js (Startvorlagen, Demo-Daten)
+server/   index.js (Start) · app.js (API) · stations.js (Stationen, Plan, Timer) · inventory.js (Inventur, Erinnerungen) · courses-extra.js · db.js (Schema/Migrationen) · auth.js · seed.js (Startvorlagen, Demo-Daten)
 shared/   codes.js (Barcode-/QR-Erkennung, Server + Browser)
 public/   index.html · app.js · i18n.js · icons.js · style.css · sw.js · manifest
 scripts/  create-admin.js (erster Betreiber-Account)

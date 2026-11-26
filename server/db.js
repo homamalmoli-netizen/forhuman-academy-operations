@@ -408,6 +408,41 @@ const MIGRATIONS = [
   ALTER TABLE task_templates ADD COLUMN station_id INTEGER REFERENCES stations(id);
   CREATE INDEX idx_obs_user ON observations(user_id, station_id);
   `,
+
+  // 3: Wöchentliche Inventur, Erinnerungen, Rollen für Aufgaben, Gültigkeit von Schulungen
+  `
+  ALTER TABLE task_templates ADD COLUMN role TEXT NOT NULL DEFAULT 'all' CHECK (role IN ('all','shift_lead'));
+  ALTER TABLE task_templates ADD COLUMN link TEXT CHECK (link IS NULL OR link IN ('inventory'));
+  ALTER TABLE courses ADD COLUMN valid_months INTEGER CHECK (valid_months IS NULL OR valid_months BETWEEN 1 AND 60);
+  ALTER TABLE courses ADD COLUMN required INTEGER NOT NULL DEFAULT 1;
+  CREATE TABLE branch_settings (
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    key TEXT NOT NULL,
+    value TEXT NOT NULL,
+    PRIMARY KEY (branch_id, key)
+  );
+  CREATE TABLE inventory_counts (
+    id INTEGER PRIMARY KEY,
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    week TEXT NOT NULL,                    -- ISO-Woche, z. B. 2026-W48
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','submitted')),
+    started_by INTEGER NOT NULL REFERENCES users(id),
+    started_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    submitted_by INTEGER REFERENCES users(id),
+    submitted_at TEXT,
+    UNIQUE (branch_id, week)
+  );
+  CREATE TABLE inventory_lines (
+    count_id INTEGER NOT NULL REFERENCES inventory_counts(id),
+    item_id INTEGER NOT NULL REFERENCES items(id),
+    counted REAL NOT NULL CHECK (counted >= 0),
+    expected REAL,                          -- Soll-Bestand beim Abschluss
+    counted_by INTEGER NOT NULL REFERENCES users(id),
+    PRIMARY KEY (count_id, item_id)
+  );
+  -- Erinnerungen nur einmal je Anlass erzeugen
+  CREATE UNIQUE INDEX idx_notif_remind ON notifications(branch_id, ref) WHERE ref LIKE 'remind:%';
+  `,
 ];
 
 export function openDb(file = ':memory:') {

@@ -250,3 +250,9 @@ html, body { overflow-x: hidden; }
 .timer .row > * { flex: 1 1 0; min-width: 0; padding: 0 8px; }
 .card, .timer, .product { min-width: 0; }
 .course b { overflow-wrap: anywhere; hyphens: auto; }
+
+/* Inventur, Erinnerungen */
+.banner-card { border-color: var(--gold); background: #fffaf0; }
+.inv-head { display: grid; gap: 6px; }
+.inv-head.state-overdue { border-color: var(--red); background: #fff6f6; }
+.tbl.inv input { min-height: 44px; width: 100px; text-align: end; }

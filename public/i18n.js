@@ -136,6 +136,19 @@ const T = {
   hold: ['Haltezeit', 'Holding time', 'وقت الحفظ', 'Bekleme süresi'],
   cook: ['Garzeit', 'Cooking time', 'وقت الطهي', 'Pişirme süresi'],
   min: ['Min', 'min', 'د', 'dk'],
+  inventory: ['Wöchentliche Inventur', 'Weekly stock count', 'الجرد الأسبوعي', 'Haftalık sayım'],
+  inventory_due: ['Heute fällig', 'Due today', 'مستحق اليوم', 'Bugün'],
+  inventory_overdue: ['Überfällig', 'Overdue', 'متأخر', 'Gecikmiş'],
+  inventory_upcoming: ['Fällig am', 'Due on', 'مستحق في', 'Tarih'],
+  inventory_done: ['Erledigt', 'Done', 'تم', 'Tamam'],
+  counted: ['Gezählt', 'Counted', 'المعدود', 'Sayılan'],
+  expected: ['Soll', 'Expected', 'المتوقع', 'Beklenen'],
+  save_draft: ['Zwischenspeichern', 'Save draft', 'حفظ مؤقت', 'Taslak kaydet'],
+  finish_inventory: ['Inventur abschließen', 'Complete stock count', 'إنهاء الجرد', 'Sayımı tamamla'],
+  open_inventory: ['Inventur öffnen', 'Open stock count', 'افتح الجرد', 'Sayımı aç'],
+  open_trainings: ['Offene Pflichtschulungen', 'Open required trainings', 'تدريبات إلزامية مفتوحة', 'Açık zorunlu eğitimler'],
+  expired_training: ['abgelaufen – bitte wiederholen', 'expired – please repeat', 'منتهي – أعد من فضلك', 'süresi doldu – tekrarla'],
+  valid_until: ['gültig bis', 'valid until', 'صالح حتى', 'geçerlilik'],
 };
 
 const IDX = { de: 0, en: 1, ar: 2, tr: 3 };
