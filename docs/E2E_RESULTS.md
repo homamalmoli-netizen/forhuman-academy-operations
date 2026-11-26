@@ -1,6 +1,6 @@
 # End-to-End-Ergebnis
 
-Ausgeführt: 2026-11-26T09:08:26.372Z · Chrome · Handy-Ansicht 390×844
+Ausgeführt: 2026-11-26T19:53:44.926Z · Chrome · Handy-Ansicht 390×844
 
 - ✅ Startseite: Sprache wählen und Demo ohne Login
 - ✅ Öffnung: eine Aufgabe pro Bildschirm, Erledigt
@@ -41,8 +41,12 @@ Ausgeführt: 2026-11-26T09:08:26.372Z · Chrome · Handy-Ansicht 390×844
 - ✅ Persönliche Aufgaben: Schichtführer teilt ein, Mitarbeiter sieht nur seine Aufgaben
 - ✅ Öl: tägliche Prüfung „nicht zulässig“ sperrt Fritteuse, Wechsel hebt Sperre auf
 - ✅ Wochenbericht je Filiale
+- ✅ Schulungsbereiche: 10 Bereiche × 3 Stufen, Stufe 2 gesperrt
+- ✅ Schulung: Lernschritte, Prüfung mit gemischten Fragen, Ergebnis mit Erklärungen
+- ✅ Hilfe „Wie mache ich das?“ – Suche in Schulung, Handbuch, Anleitungen
 - ✅ Admin: Anleitung (SOP) mit Prüfstatus und Versionen
+- ✅ Betreiber: Schulungsbereiche – Übersicht, Fragenpool, Inhalte und Fragen bearbeiten
 - ✅ Produktion: nur Anmeldung, keine Demo-Buttons, keine Standardkonten
 - ✅ Offline: keine falsche Erfolgsmeldung
 
-**42 von 42 bestanden.** Screenshots: `docs/screenshots/`
+**46 von 46 bestanden.** Screenshots: `docs/screenshots/`

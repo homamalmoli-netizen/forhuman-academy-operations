@@ -16,6 +16,7 @@ import { registerMarinades } from './marinades.js';
 import { registerOil, oilStatus, ensureOilTemplates, oilChangeDue } from './oil.js';
 import { registerAssign, autoAssign, shiftCandidates } from './assign.js';
 import { registerAccounts, certStatus } from './accounts.js';
+import { registerTraining } from './training.js';
 
 export const LANGS = ['de', 'ar', 'en', 'tr'];
 const SHIFTS = ['open', 'run', 'close'];
@@ -981,6 +982,7 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
   registerOil({ route, db, needUser, needBranch, HttpError, bad, notFound, notify });
   registerAssign({ route, db, needUser, needBranch, HttpError, bad, notFound, notify });
   registerAccounts({ route, db, needUser, needBranch, needAdmin, HttpError, bad, notFound, notify });
+  registerTraining({ route, db, needUser, needBranch, needAdmin, HttpError, bad, notFound });
   route('PATCH', '/api/courses/:id', (ctx) => {
     const a = needAdmin(ctx);
     const c = db.prepare('SELECT * FROM courses WHERE id = ?').get(Number(ctx.params.id));

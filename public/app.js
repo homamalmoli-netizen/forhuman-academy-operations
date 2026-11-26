@@ -252,8 +252,10 @@ async function viewLearn() {
   render(__seq, `<section class="card level-card"><small>${esc(tr('level'))}</small>
       <div class="ladder">${ladder.map((l, i) => `<span class="rung ${i < st.level.rank ? 'on' : ''} ${l === st.level.level ? 'current' : ''}">${i + 1}<small>${esc(levelLabel(l))}</small></span>`).join('')}</div>
       <p><b>${esc(levelLabel(st.level.level))}</b> · ${st.level.certified}/${st.level.total} ${esc(tr('my_stations'))}</p></section>
+    <a class="primary block" href="#/train">${icon('school')} ${esc(tr('train_areas'))}</a>
+    <a class="secondary block" href="#/help">${icon('book')} ${esc(tr('help_title'))}</a>
     <a class="secondary block" href="#/welcome">${icon('user')} ${esc(tr('welcome'))} & Nachweise</a>
-    <a class="primary block" href="#/handbook">${icon('book')} ${esc(tr('handbook'))}</a>
+    <a class="secondary block" href="#/handbook">${icon('book')} ${esc(tr('handbook'))}</a>
     <h2>${icon('store')} ${esc(tr('my_stations'))}</h2>
     <div class="course-list">${st.stations.map((x) => `<div class="course">${icon(x.icon, 'big')}<div><b>${esc(x.name)}</b>${x.sop_id ? `<small><a href="#/sop/${x.sop_id}">${esc(tr('btn_guide'))} →</a></small>` : ''}</div>
       ${x.certified ? `<span class="badge ok">${esc(tr('certified'))}</span>` : `<span class="badge">${esc(tr('not_certified'))}</span>`}</div>`).join('')}</div>
@@ -311,6 +313,79 @@ function viewExamResult(id, r, questions) {
       ${r.passed && r.needs_practical && !r.practical ? `<div class="banner">${icon('shield')} ${esc(tr('needs_practical'))}. ${esc(tr('practical_hint'))}</div>` : ''}
       <div class="row">${!r.passed ? `<a class="primary" href="#/learn/${id}">${esc(tr('repeat'))}</a>` : ''}<a class="secondary" href="#/learn">${esc(tr('courses'))}</a></div>
     </section>`);
+}
+
+// --- Schulungsbereiche (10 × 3 Stufen) ----------------------------------------------------
+const TST = { open: '', locked: '', preparing: 'warn', needs_practical: 'warn', certified: 'ok' };
+async function viewTrain() {
+  const __seq = renderSeq;
+  let areas, certs;
+  try { [areas, certs] = await Promise.all([get(`/api/train?${qs({ branch: S.branch, lang: S.lang })}`), get(`/api/train/certificates?lang=${S.lang}`)]); } catch (e) { return render(__seq, errorBox(e)); }
+  render(__seq, `<h1 class="page-title">${icon('school')} ${esc(tr('train_areas'))}</h1><p class="note">${esc(tr('train_intro'))}</p>
+    <a class="secondary block" href="#/help">${icon('book')} ${esc(tr('help_title'))}</a>
+    <div class="area-list">${areas.map((a) => `<section class="card area"><h2>${icon(a.icon)} ${esc(a.title)}</h2>
+      ${a.stations.length ? `<small class="note">${icon('store')} ${a.stations.map(esc).join(', ')}</small>` : ''}
+      <div class="levels">${a.levels.map((l) => `<a class="level-pill ${l.state}" href="#/train/${l.id}"><b>${l.level}</b><span>${esc(l.label)}</span>
+        <span class="badge ${TST[l.state]}">${esc(tr('st_' + l.state))}</span><small>${l.pool}/${l.pool_target} ${esc(tr('questions_pool'))}</small></a>`).join('')}</div></section>`).join('')}</div>
+    <h2>${icon('star')} ${esc(tr('my_certificates'))}</h2><ul class="plain">${certs.map((c) => `<li>${icon('check')} <b>${esc(c.title)}</b> · ${new Date(c.issued_at).toLocaleDateString('de-DE')} · <code>${esc(c.code)}</code>${c.signed_by ? ` · ${esc(c.signed_by)}` : ''}</li>`).join('') || '<li>–</li>'}</ul>`);
+}
+
+async function viewTrainModule(id) {
+  const __seq = renderSeq;
+  let m;
+  try { m = await get(`/api/train/modules/${id}?${qs({ branch: S.branch, lang: S.lang })}`); } catch (e) { return render(__seq, errorBox(e)); }
+  const canStart = m.unlocked && m.exam_ready && m.state !== 'certified';
+  render(__seq, `<a class="back-link" href="#/train">${icon('back')} ${esc(tr('train_areas'))}</a>
+    <section class="card"><h1>${esc(m.title)}</h1><span class="badge ${TST[m.state]}">${esc(tr('st_' + m.state))}</span>
+      ${!m.translation_reviewed ? `<div class="banner">${esc(tr('translation_unreviewed'))}</div>` : ''}
+      <ol class="steps">${m.steps.map((s, k) => `<li class="todo"><span class="num">${k + 1}</span><p>${esc(s)}</p></li>`).join('')}</ol>
+      ${canSpeak() ? `<div class="actions"><button class="act" data-action="speak" data-text="${esc(m.steps.join('. '))}">${icon('speak')}<span>${esc(tr('btn_speak'))}</span></button></div>` : ''}
+      ${m.video_url ? `<a class="secondary block" href="${esc(m.video_url)}" target="_blank" rel="noopener noreferrer">${icon('eye')} ${esc(tr('watch_video'))}</a>` : ''}
+      ${m.open_points.length ? `<div class="banner">${icon('warn')} <b>${esc(tr('open_points'))}:</b><ul>${m.open_points.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
+      <p class="note">${m.pool}/${m.pool_target} ${esc(tr('questions_pool'))} · ${esc(tr('train_intro'))}</p>
+      ${m.last_attempt ? `<p class="note">${esc(m.last_attempt.passed ? tr('passed') : tr('failed'))}: ${m.last_attempt.score}/${m.last_attempt.total}</p>` : ''}
+      ${m.certificate ? `<p class="badge ok">${icon('star')} ${esc(tr('st_certified'))} · ${esc(m.certificate.code)}</p>` : ''}
+      ${m.state === 'needs_practical' ? `<div class="banner">${icon('shield')} ${esc(tr('practical_hint'))}</div>` : ''}
+      ${canStart ? `<button class="primary block" data-action="train-start" data-id="${m.id}">${icon('school')} ${esc(m.last_attempt && !m.last_attempt.passed ? tr('repeat') : tr('start_test'))}</button>` : ''}
+    </section>`);
+}
+
+async function viewTrainExam(id) {
+  const __seq = renderSeq;
+  let e;
+  try { e = await get(`/api/train/attempts/${id}?lang=${S.lang}`); } catch (err) { return render(__seq, errorBox(err) + `<a class="secondary" href="#/train">${esc(tr('back'))}</a>`); }
+  render(__seq, `<section class="card exam"><h1>${icon('school')} ${esc(e.title)}</h1>
+    ${!e.translation_reviewed ? `<div class="banner">${esc(tr('translation_unreviewed'))}</div>` : ''}
+    <form data-submit="train-exam" data-id="${e.id}" data-module="${e.module_id}">
+    ${e.questions.map((q) => `<fieldset><legend>${q.index + 1}. ${esc(q.q)} ${q.safety ? `<span class="badge warn">${icon('shield')} ${esc(tr('safety_q'))}</span>` : ''}</legend>
+      ${q.options.map((o, k) => `<label class="option"><input type="radio" name="q${q.index}" value="${k}" required><span>${esc(o)}</span></label>`).join('')}</fieldset>`).join('')}
+    <button class="primary block">${esc(tr('submit_exam'))}</button></form></section>`);
+}
+
+function viewTrainResult(moduleId, r) {
+  shell(`<section class="card exam-result ${r.passed ? 'ok' : 'fail'}">
+    ${icon(r.passed ? 'check' : 'warn', 'huge')}<h1>${esc(r.passed ? tr('passed') : tr('failed'))}</h1>
+    <p class="score">${r.score} / ${r.total} (${r.percent} %)</p>
+    ${!r.safety_ok ? `<div class="banner">${icon('shield')} ${esc(tr('safety_failed'))}</div>` : ''}
+    ${r.needs_practical ? `<div class="banner">${icon('shield')} ${esc(tr('needs_practical'))}. ${esc(tr('practical_hint'))}</div>` : ''}
+    ${r.certificate ? `<p class="badge ok">${icon('star')} ${esc(tr('st_certified'))} · ${esc(r.certificate)}</p>` : ''}
+    <ol class="plain results">${r.results.filter((x) => !x.correct).map((x) => `<li class="bad">${icon('warn')} ${esc(x.q)}${x.safety ? ` <span class="badge warn">${esc(tr('safety_q'))}</span>` : ''}
+      <br><small>${esc(tr('your_answer'))}: ${esc(x.given)}</small><br><small>✓ ${esc(tr('right_answer'))}: <b>${esc(x.right)}</b></small>${x.explain ? `<p class="note">${esc(x.explain)}</p>` : ''}</li>`).join('')}</ol>
+    <div class="row">${!r.passed ? `<button class="primary" data-action="train-start" data-id="${moduleId}">${esc(tr('repeat'))}</button>` : ''}<a class="secondary" href="#/train">${esc(tr('train_areas'))}</a></div>
+  </section>`);
+}
+
+async function viewHelp() {
+  const __seq = renderSeq;
+  const q = S.helpQ || '';
+  let res = { results: [] };
+  if (q) { try { res = await get(`/api/help?${qs({ q, lang: S.lang })}`); } catch (e) { return render(__seq, errorBox(e)); } }
+  const kind = { training: ['school', tr('train_areas')], handbook: ['book', tr('handbook')], guide: ['list', tr('btn_guide')] };
+  render(__seq, `<h1 class="page-title">${icon('book')} ${esc(tr('help_title'))}</h1>
+    <form data-submit="help" class="form card"><label>${esc(tr('help_title'))}<input name="q" value="${esc(q)}" placeholder="${esc(tr('help_placeholder'))}" required></label>
+      <button class="primary">${esc(tr('search'))}</button></form>
+    ${q ? (res.results.length ? `<div class="course-list">${res.results.map((r) => `<a class="course" href="${esc(r.link)}">${icon(kind[r.kind][0], 'big')}<div><b>${esc(r.title)}</b><small>${esc(r.snippet)}</small></div><span class="badge">${esc(kind[r.kind][1])}</span></a>`).join('')}</div>`
+      : `<p class="note">${esc(tr('no_results'))}</p>`) : ''}`);
 }
 
 // --- Timer (Haltezeiten) -------------------------------------------------------------
@@ -537,7 +612,7 @@ function viewMore() {
   render(__seq, `<h1 class="page-title">${icon('dash')} ${esc(tr('tab_more'))}</h1><div class="persona-grid more-grid">
     ${b('#/goods', 'scan', tr('tab_goods'))}${b('#/daily/early', 'sun', tr('daily_inventory') + ' ' + tr('early_shift'))}${b('#/daily/late', 'moon', tr('daily_inventory') + ' ' + tr('late_shift'))}
     ${b('#/inventory', 'box', tr('inventory'))}${b('#/oil', 'oil', tr('tab_oil'))}${b('#/marinade', 'prep', tr('marinade'))}${b('#/pest', 'bug', tr('pest_check'))}${b('#/handbook', 'book', tr('handbook'))}
-    ${b('#/problem/', 'warn', tr('btn_problem'))}</div>`);
+    ${b('#/help', 'book', tr('help_title'))}${b('#/train', 'school', tr('train_areas'))}${b('#/problem/', 'warn', tr('btn_problem'))}</div>`);
 }
 
 // --- Reinigungsplan ------------------------------------------------------------------------
@@ -682,7 +757,7 @@ async function viewOil() {
 function manageNav(active) {
   const items = [['dashboard', 'dash', 'Übersicht'], ['positions', 'store', 'Positionsplan'], ['observe', 'eye', 'Stationscheck'], ['stations', 'star', 'Stationen & Stufen'],
     ['staff', 'lock', 'Mitarbeiter & Zugänge'], ['certs', 'shield', 'Nachweise (§43/METRO)'], ['staffing', 'user', 'Besetzung & Verteilung'], ['week', 'report', 'Wochenbericht'], ['daily', 'box', 'Tagesinventur'], ['onboarding', 'shield', 'Einarbeitung'], ['problems', 'warn', 'Probleme'], ['report', 'report', 'Schichtbericht'], ['templates', 'list', 'Aufgaben-Vorlagen'], ['products', 'history', 'Haltezeiten'],
-    ['training', 'school', 'Schulung & Freigaben'], ['stock', 'box', 'Bestand & Codes'], ['oil', 'oil', 'Öl-Grenzwerte'], ['audit', 'history', 'Protokoll']];
+    ['academy', 'school', 'Schulungsbereiche'], ['training', 'school', 'Schulung & Freigaben'], ['stock', 'box', 'Bestand & Codes'], ['oil', 'oil', 'Öl-Grenzwerte'], ['audit', 'history', 'Protokoll']];
   if (S.me.is_admin) items.push(['recipes', 'prep', 'Rezepturen (Marinaden)'], ['sops', 'book', 'Anleitungen (SOP)'], ['users', 'user', 'Benutzer & Filialen']);
   const allowed = { dashboard: true, staffing: isShiftLead(), week: isShiftLead(), daily: isShiftLead(), onboarding: isTrainer(), positions: isShiftLead(), observe: isTrainer(), stations: isShiftLead() || isTrainer(), training: isTrainer() || isManager() };
   const visible = items.filter(([k]) => isManager() || allowed[k]);
@@ -692,7 +767,7 @@ function manageNav(active) {
 async function viewManage(sub = 'dashboard', arg) {
   const __seq = renderSeq;
   try {
-    const fn = { dashboard: mDashboard, staff: mStaff, certs: mCerts, staffing: mStaffing, week: mWeek, recipes: mRecipes, daily: mDaily, onboarding: mOnboarding, positions: mPositions, observe: mObserve, stations: mStations, products: mProducts, problems: mProblems, report: mReport, templates: mTemplates, training: mTraining, stock: mStock, oil: mOil, audit: mAudit, sops: mSops, users: mUsers }[sub] || mDashboard;
+    const fn = { dashboard: mDashboard, academy: mAcademy, staff: mStaff, certs: mCerts, staffing: mStaffing, week: mWeek, recipes: mRecipes, daily: mDaily, onboarding: mOnboarding, positions: mPositions, observe: mObserve, stations: mStations, products: mProducts, problems: mProblems, report: mReport, templates: mTemplates, training: mTraining, stock: mStock, oil: mOil, audit: mAudit, sops: mSops, users: mUsers }[sub] || mDashboard;
     const html = await fn(arg);
     render(__seq, `${manageNav(sub)}<div class="manage">${html}</div>`);
   } catch (e) { render(__seq, `${manageNav(sub)}${errorBox(e)}`); }
@@ -737,6 +812,51 @@ async function mDaily() {
       ${r.meat.lines.map((l) => `<tr><td>${esc(l.item)}</td><td>${l.start ?? '–'}</td><td>${l.incoming ?? '–'}</td><td><b>${l.usage ?? '–'}</b></td><td>${l.rest} ${esc(l.unit)}</td><td>${l.marinated ?? '–'}</td><td>${l.unusable ?? '–'}</td></tr>`).join('')}</tbody></table>
       <p class="note">Verbrauch = Anfangsbestand + Zugang (Wareneingang) − Restbestand − nicht verwendbare Ware.</p>` : ''}
     ${isManager() ? `<h2>Fristen</h2><form data-submit="daily-settings" class="inline card"><label>Frühschicht bis<input name="early" type="time" value="${esc(r.deadlines.early)}"></label><label>Spätschicht bis<input name="late" type="time" value="${esc(r.deadlines.late)}"></label><button class="small primary">Speichern</button></form>` : ''}`;
+}
+
+async function mAcademy(arg) {
+  const d = await get(`/api/train/overview?branch=${S.branch}`);
+  let html = `<h1>${icon('school')} Schulungsbereiche</h1>
+    <p class="note">10 Bereiche × 3 Stufen. Ziel: ${d.pool_target} Fragen je Stufe; prüfbar ab ${d.exam_min} freigegebenen Fragen. Bestanden ab 80 % und alle Sicherheitsfragen richtig. Danach praktische Freigabe durch Trainer/Leitung → Zertifikat.</p>
+    <h2>Praktische Freigabe offen (${d.pending.length})</h2>
+    ${d.pending.map((p) => `<form data-submit="train-signoff" data-module="${p.module_id}" data-user="${p.user_id}" class="card form"><b>${esc(p.name)}</b> · ${esc(p.title)} <small>Theorie bestanden ${fmtTime(p.passed_at)}</small>
+      ${d.can_sign ? `<label>Notiz<input name="note" placeholder="z. B. Station sauber gezeigt"></label><button class="primary">Praktisch freigeben</button>` : '<p class="note">Freigabe nur durch Trainer oder Leitung.</p>'}</form>`).join('') || '<p class="note">Keine offenen Freigaben.</p>'}
+    <h2>Stand je Mitarbeiter (höchste zertifizierte Stufe)</h2><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Mitarbeiter</th>${d.areas.map((a) => `<th title="${esc(a.title)}">${esc(a.title)}</th>`).join('')}</tr></thead><tbody>
+    ${d.people.map((p) => `<tr><td>${esc(p.display_name)}</td>${d.areas.map((a) => `<td class="${p.levels[a.id] ? 'ok-cell' : ''}">${p.levels[a.id] ? '★'.repeat(p.levels[a.id]) : '–'}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+    <h2>Fragenpool & offene Punkte</h2><table class="tbl"><thead><tr><th>Bereich</th><th>Stationen</th><th>Stufe 1</th><th>Stufe 2</th><th>Stufe 3</th></tr></thead><tbody>
+    ${d.areas.map((a) => `<tr><td>${esc(a.title)}</td><td>${a.stations.map(esc).join(', ') || '–'}</td>${a.modules.map((m) => `<td><span class="badge ${m.active >= d.pool_target ? 'ok' : m.active >= d.exam_min ? 'warn' : 'change'}">${m.active}/${d.pool_target}</span>${m.open_points ? ` <small>${m.open_points} offen</small>` : ''}${S.me.is_admin ? ` <a href="#/manage/academy/${m.id}">bearbeiten</a>` : ''}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+  if (arg && S.me.is_admin) html += await academyEditor(Number(arg));
+  return html;
+}
+
+async function academyEditor(id) {
+  const m = await get(`/api/train/modules/${id}/edit`);
+  const st = (L) => (m.content[L]?.steps || []).join('\n');
+  const qForm = (q) => {
+    const c = q?.content || {};
+    const f = (L) => { const x = c[L] || { options: [] }; return `<fieldset><legend>${L.toUpperCase()}${L === 'de' ? ' (Pflicht)' : ' (optional, sonst Deutsch)'}</legend>
+      <label>Frage<input name="${L}_q" value="${esc(x.q || '')}" ${L === 'de' ? 'required' : ''} ${L === 'ar' ? 'dir="rtl"' : ''}></label>
+      <label>Richtige Antwort<input name="${L}_a" value="${esc(x.options[0] || '')}" ${L === 'de' ? 'required' : ''} ${L === 'ar' ? 'dir="rtl"' : ''}></label>
+      <div class="grid2"><label>Falsch 1<input name="${L}_b" value="${esc(x.options[1] || '')}" ${L === 'ar' ? 'dir="rtl"' : ''}></label><label>Falsch 2<input name="${L}_c" value="${esc(x.options[2] || '')}" ${L === 'ar' ? 'dir="rtl"' : ''}></label></div>
+      <label>Erklärung bei Fehler<input name="${L}_x" value="${esc(x.explain || '')}" ${L === 'ar' ? 'dir="rtl"' : ''}></label></fieldset>`; };
+    return `<details class="card"><summary>${q ? `${esc(c.de?.q || '')} ${q.safety ? '🛡' : ''} <small>(${esc(q.status)})</small>` : `${icon('add')} Neue Frage`}</summary>
+      <form data-submit="train-question" ${q ? `data-id="${q.id}"` : `data-module="${m.id}"`} class="form">${f('de')}${f('en')}${f('ar')}
+      <label class="check"><input type="checkbox" name="safety" ${q?.safety ? 'checked' : ''}> Sicherheits-/Hygienefrage (muss richtig sein)</label>
+      <label>Status<select name="status"><option value="active" ${q?.status === 'active' || !q ? 'selected' : ''}>aktiv (in der Prüfung)</option><option value="open" ${q?.status === 'open' ? 'selected' : ''}>offen (wartet auf Inhalte)</option>${q ? '<option value="archived">archivieren</option>' : ''}</select></label>
+      <button class="primary">Speichern</button></form></details>`;
+  };
+  return `<h2 id="editor">${icon('edit')} ${esc(m.title)} bearbeiten <small>(Version ${m.version})</small></h2>
+    <form data-submit="train-module" data-id="${m.id}" class="form card">
+      <label>Lernschritte DE (eine Zeile je Schritt)<textarea name="steps_de" rows="5" required>${esc(st('de'))}</textarea></label>
+      <label>Lernschritte EN<textarea name="steps_en" rows="4">${esc(st('en'))}</textarea></label>
+      <label>Lernschritte AR<textarea name="steps_ar" rows="4" dir="rtl">${esc(st('ar'))}</textarea></label>
+      <label>Video-Link (https, optional)<input name="video_url" value="${esc(m.video_url)}" placeholder="https://"></label>
+      <label>Offene Punkte (eine Zeile je Punkt)<textarea name="open_points" rows="3">${esc(m.open_points.join('\n'))}</textarea></label>
+      <label class="check"><input type="checkbox" name="practical_required" ${m.practical_required ? 'checked' : ''}> Praktische Freigabe erforderlich</label>
+      <label class="check"><input type="checkbox" name="rev_en" ${m.reviewed_langs.includes('en') ? 'checked' : ''}> Englisch fachlich geprüft</label>
+      <label class="check"><input type="checkbox" name="rev_ar" ${m.reviewed_langs.includes('ar') ? 'checked' : ''}> Arabisch fachlich geprüft</label>
+      <button class="primary">Inhalte speichern</button></form>
+    <h3>Fragen (${m.questions.filter((q) => q.status === 'active').length} aktiv)</h3>${qForm(null)}${m.questions.map(qForm).join('')}`;
 }
 
 async function mStaff() {
@@ -1068,6 +1188,9 @@ async function route() {
     case 'marinade': return viewMarinade();
     case 'more': return viewMore();
     case 'welcome': return viewWelcome();
+    case 'train': return b ? viewTrainModule(b) : viewTrain();
+    case 'texam': return viewTrainExam(b);
+    case 'help': return viewHelp();
     case 'cleaning': return viewCleaning();
     case 'task': return viewTask(b);
     case 'goods': return viewGoods();
@@ -1106,6 +1229,7 @@ document.addEventListener('click', async (ev) => {
     if (A === 'print') return window.print();
     if (A === 'tpl-move') { await post(`/api/templates/${el.dataset.id}/move`, { dir: el.dataset.dir }); return route(); }
     if (A === 'tpl-photo') { await api('PATCH', `/api/templates/${el.dataset.id}`, { requires_photo: el.dataset.val === '1' }); return route(); }
+    if (A === 'train-start') { const r = await post(`/api/train/modules/${el.dataset.id}/start`, { branch: S.branch, lang: S.lang }); location.hash = `#/texam/${r.attempt_id}`; return; }
     if (A === 'staff-reset') { const r = await post(`/api/staff/${el.dataset.id}/reset`); S.lastInvite = { name: el.dataset.name, ...r }; S.flash = { type: 'ok', text: 'Neuer Code erstellt – altes Passwort ist ungültig.' }; return route(); }
     if (A === 'staff-active') { await post(`/api/staff/${el.dataset.id}/active`, { active: el.dataset.val === '1' }); S.flash = { type: 'ok', text: tr('saved') }; return route(); }
     if (A === 'presence') { await post('/api/presence', { branch: S.branch, shift: S.shift }); S.flash = { type: 'ok', text: tr('saved') }; return route(); }
@@ -1210,6 +1334,27 @@ document.addEventListener('submit', async (ev) => {
         const answers = qsList.map((q) => Number(fd['q' + q.index]));
         const r = await post(`/api/courses/${id}/exam`, { branch: S.branch, lang: form.dataset.lang, answers });
         return viewExamResult(id, r, qsList);
+      }
+      case 'train-exam': {
+        const n = form.querySelectorAll('fieldset').length;
+        const answers = [...Array(n)].map((_, i) => Number(fd['q' + i]));
+        const r = await post(`/api/train/attempts/${form.dataset.id}/submit`, { answers, lang: S.lang });
+        return viewTrainResult(form.dataset.module, r);
+      }
+      case 'help': S.helpQ = fd.q; return route();
+      case 'train-signoff': await post(`/api/train/modules/${form.dataset.module}/signoff`, { branch: S.branch, user_id: Number(form.dataset.user), note: fd.note }); S.flash = { type: 'ok', text: 'Praktisch freigegeben – Zertifikat erstellt.' }; break;
+      case 'train-module': {
+        const lines = (v) => String(v || '').split('\n').map((x) => x.trim()).filter(Boolean);
+        await api('PUT', `/api/train/modules/${form.dataset.id}`, { steps: { de: lines(fd.steps_de), en: lines(fd.steps_en), ar: lines(fd.steps_ar) }, video_url: fd.video_url, open_points: lines(fd.open_points),
+          practical_required: !!fd.practical_required, reviewed_langs: [fd.rev_en && 'en', fd.rev_ar && 'ar'].filter(Boolean) });
+        S.flash = { type: 'ok', text: tr('saved') }; break;
+      }
+      case 'train-question': {
+        const content = {};
+        for (const L of ['de', 'en', 'ar']) if ((fd[L + '_q'] || '').trim()) content[L] = { q: fd[L + '_q'], options: [fd[L + '_a'], fd[L + '_b'], fd[L + '_c']].filter((x) => (x || '').trim()), explain: fd[L + '_x'] };
+        const body = { content, safety: !!fd.safety, status: fd.status };
+        if (form.dataset.id) await api('PUT', `/api/train/questions/${form.dataset.id}`, body); else await post(`/api/train/modules/${form.dataset.module}/questions`, body);
+        S.flash = { type: 'ok', text: tr('saved') }; break;
       }
       case 'scan': await doScan(fd.code); return;
       case 'receipt': {

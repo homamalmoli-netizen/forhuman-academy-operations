@@ -112,9 +112,8 @@ try {
   await step('Sprachwechsel Arabisch: RTL und übersetzte Aufgabe', async () => {
     await p.selectOption('select[data-change=lang]', 'ar');
     await p.waitForFunction(() => document.documentElement.dir === 'rtl');
-    await p.locator('.task-title').waitFor();
-    const title = await p.locator('.task-title').innerText();
-    assert.match(title, /[؀-ۿ]/);
+    // auf die neu gerenderte, übersetzte Karte warten (nicht den alten deutschen Stand lesen)
+    await p.waitForFunction(() => /[\u0600-\u06FF]/.test(document.querySelector('.task-title')?.textContent || ''), null, { timeout: 15000 });
     await shot(p, '07-arabisch-rtl');
     await p.selectOption('select[data-change=lang]', 'tr');
     await p.waitForFunction(() => document.documentElement.dir === 'ltr');
@@ -542,6 +541,37 @@ try {
     await sl.locator('h1', { hasText: 'Wochenbericht' }).waitFor();
     await shotFull(sl, '47-wochenbericht');
   });
+
+  await step('Schulungsbereiche: 10 Bereiche × 3 Stufen, Stufe 2 gesperrt', async () => {
+    await nav(p, '#/train');
+    await p.locator('.area').first().waitFor();
+    assert.equal(await p.locator('.area').count(), 10);
+    assert.equal(await p.locator('.area').first().locator('.level-pill').count(), 3);
+    await shotFull(p, '51-schulungsbereiche');
+  });
+
+  await step('Schulung: Lernschritte, Prüfung mit gemischten Fragen, Ergebnis mit Erklärungen', async () => {
+    await p.locator('.area').first().locator('.level-pill').first().click();
+    await p.locator('button[data-action=train-start]').waitFor();
+    await shotFull(p, '52-schulung-stufe');
+    await p.click('button[data-action=train-start]');
+    await p.locator('form[data-submit=train-exam] fieldset').first().waitFor();
+    const n = await p.locator('form[data-submit=train-exam] fieldset').count();
+    assert.equal(n, 20);
+    await shot(p, '53-schulung-pruefung');
+    for (let i = 0; i < n; i++) await p.locator(`input[name=q${i}]`).first().check();
+    await p.click('form[data-submit=train-exam] button.primary');
+    await p.locator('.exam-result').waitFor();
+    await shotFull(p, '54-schulung-ergebnis');
+  });
+
+  await step('Hilfe „Wie mache ich das?“ – Suche in Schulung, Handbuch, Anleitungen', async () => {
+    await nav(p, '#/help');
+    await p.fill('form[data-submit=help] input[name=q]', 'Öl filtern');
+    await p.click('form[data-submit=help] button');
+    await p.locator('.course-list .course').first().waitFor();
+    await shotFull(p, '55-hilfe-suche');
+  });
   assert.deepEqual(p.errors.concat(sl.errors, tr2.errors), [], 'JavaScript-Fehler: ' + p.errors.concat(sl.errors, tr2.errors).join('; '));
 
   const a = await newPage();
@@ -556,6 +586,14 @@ try {
     await a.click('a[href="#/manage/recipes/neu"]');
     await a.locator('form[data-submit=recipe]').waitFor();
     await shotFull(a, '42-rezeptur-bearbeiten');
+  });
+
+  await step('Betreiber: Schulungsbereiche – Übersicht, Fragenpool, Inhalte und Fragen bearbeiten', async () => {
+    await a.click('a[href="#/manage/academy"]');
+    await a.locator('h2', { hasText: 'Fragenpool' }).waitFor();
+    await a.locator('a[href^="#/manage/academy/"]').nth(1).click();
+    await a.locator('form[data-submit=train-module]').waitFor();
+    await shotFull(a, '56-schulung-bearbeiten');
   });
 
   // --- Produktion: keine Demo, keine Umgehung ---

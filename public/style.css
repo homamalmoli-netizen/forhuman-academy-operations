@@ -311,3 +311,19 @@ a.small { text-decoration: none; }
 .invite-code { font-size: 1.9rem; font-weight: 800; letter-spacing: .08em; text-align: center; font-family: "DejaVu Sans Mono", monospace; margin: 8px 0; }
 .inactive-row td { opacity: .55; }
 .welcome-list .welcome-item { padding: 10px 0; }
+
+/* Schulungsbereiche */
+.area-list { display: grid; gap: 12px; }
+.area h2 { margin-bottom: 4px; }
+.levels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+.level-pill { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 6px; border: 2px solid var(--line, #ddd); border-radius: 12px; text-decoration: none; color: inherit; text-align: center; }
+.level-pill b { font-size: 1.4rem; }
+.level-pill.certified { border-color: #2e7d32; background: #eef8ee; }
+.level-pill.locked { opacity: .55; }
+.level-pill small { font-size: .72rem; }
+.ok-cell { background: #eef8ee; text-align: center; }
+.tbl-wrap { overflow-x: auto; }
+.level-pill { min-width: 0; }
+.level-pill span { font-size: .8rem; overflow-wrap: anywhere; hyphens: auto; max-width: 100%; }
+.exam-result .row { flex-wrap: wrap; }
+.exam-result .row > * { flex: 1 1 140px; }
