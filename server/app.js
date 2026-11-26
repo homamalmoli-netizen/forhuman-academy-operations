@@ -11,6 +11,7 @@ import { classifyCode } from '../shared/codes.js';
 import { seedTemplates, seedStations } from './seed.js';
 import { registerStations, stationDashboard, stationAccess, myStationIds } from './stations.js';
 import { registerInventory, inventoryStatus, runReminders, openTrainings } from './inventory.js';
+import { registerDaily, dailyStatus } from './daily.js';
 
 export const LANGS = ['de', 'ar', 'en', 'tr'];
 const SHIFTS = ['open', 'run', 'close'];
@@ -76,7 +77,7 @@ function taskView(db, row, lang, user) {
   const stationOk = stationAccess(db, user, row.station_id, row.branch_id);
   return {
     station_id: row.station_id ?? null, station: row.station_name ? pickLang(j(row.station_name), lang) : null,
-    role: row.role || 'all', link: row.link || null,
+    role: row.role || 'all', link: row.action || row.link || null,
     id: row.id, status: row.status, shift: row.shift, work_date: row.work_date, position: row.position, icon: row.icon,
     category: row.category, frequency: row.frequency,
     title: pickLang(title, lang), hint: pickLang(hint, lang), title_de: title.de,
@@ -88,7 +89,7 @@ function taskView(db, row, lang, user) {
 }
 
 const OCC_SELECT = `SELECT o.*, t.title, t.hint, t.icon, t.category, t.frequency, t.requires_photo, t.measure_unit, t.limit_min, t.limit_max,
-  t.sop_id, t.required_course_id, t.station_id, t.role, t.link, s.name AS station_name, s.position AS station_pos, u.display_name AS completed_by_name,
+  t.sop_id, t.required_course_id, t.station_id, t.role, t.link, t.action, s.name AS station_name, s.position AS station_pos, u.display_name AS completed_by_name,
   (SELECT group_concat(e.media_id) FROM task_evidence e WHERE e.occurrence_id = o.id) AS photos
   FROM task_occurrences o JOIN task_templates t ON t.id = o.template_id LEFT JOIN users u ON u.id = o.completed_by
   LEFT JOIN stations s ON s.id = t.station_id`;
@@ -310,7 +311,16 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
     if (row.required_course_id && !qualification(db, u.id, row.required_course_id, branchId).ok) throw new HttpError(403, 'not_qualified', 'Schulung oder praktische Freigabe fehlt');
     if (!stationAccess(db, u, row.station_id, branchId)) throw new HttpError(403, 'not_certified', 'Für diese Station nicht freigegeben');
     if (row.role === 'shift_lead' && !can(u, branchId, 'shift_lead', 'manager', 'admin')) throw new HttpError(403, 'shift_lead_only', 'Diese Aufgabe ist für Schichtführer');
-    if (row.link === 'inventory' && inventoryStatus(db, branchId).state !== 'done') throw new HttpError(409, 'inventory_missing', 'Erst die Inventur dieser Woche abschließen');
+    const action = row.action || row.link;
+    if (action === 'inventory' && inventoryStatus(db, branchId).state !== 'done') throw new HttpError(409, 'inventory_missing', 'Erst die Inventur dieser Woche abschließen');
+    if (action === 'daily_early' || action === 'daily_late') {
+      const st = dailyStatus(db, branchId)[action === 'daily_early' ? 'early' : 'late'];
+      if (!['on_time', 'late_done'].includes(st.state)) throw new HttpError(409, 'daily_missing', 'Erst die Tagesinventur abschließen');
+    }
+    if (action === 'pest_check') {
+      const lastPest = db.prepare('SELECT created_at FROM pest_checks WHERE branch_id = ? ORDER BY id DESC LIMIT 1').get(branchId);
+      if (!lastPest || berlinDate(new Date(lastPest.created_at)) !== berlinDate()) throw new HttpError(409, 'pest_missing', 'Erst die Schädlingskontrolle ausfüllen');
+    }
     const photo = mediaInBranch(ctx.body.media_id, branchId);
     if (row.requires_photo && !photo) throw bad('photo_required', 'Foto ist Pflicht');
     let value = null;
@@ -506,6 +516,8 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
         notifications: db.prepare('SELECT * FROM notifications WHERE branch_id = ? ORDER BY id DESC LIMIT 10').all(branchId),
         ...stationDashboard(db, branchId),
         inventory: inventoryStatus(db, branchId, date),
+        daily: dailyStatus(db, branchId, date),
+        last_pest_check: db.prepare('SELECT created_at, infestation FROM pest_checks WHERE branch_id = ? ORDER BY id DESC LIMIT 1').get(branchId) || null,
         open_trainings: openTrainings(db, branchId),
       };
     });
@@ -961,6 +973,7 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
 
   registerStations({ route, db, needUser, needBranch, lang, HttpError, bad, forbidden, notFound, j, pickLang });
   registerInventory({ route, db, needUser, needBranch, HttpError, bad });
+  registerDaily({ route, db, needUser, needBranch, HttpError, bad, can, notify });
   route('PATCH', '/api/courses/:id', (ctx) => {
     const a = needAdmin(ctx);
     const c = db.prepare('SELECT * FROM courses WHERE id = ?').get(Number(ctx.params.id));

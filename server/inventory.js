@@ -2,6 +2,7 @@
 // Erinnerungen erscheinen in der App (Übersicht/Benachrichtigungen). Externe Kanäle nur, wenn konfiguriert.
 import { tx, audit } from './db.js';
 import { berlinDate, qualification } from './app.js';
+import { runDailyReminders } from './daily.js';
 
 export function isoWeekday(dateStr) {
   const d = new Date(dateStr + 'T12:00:00Z');
@@ -47,8 +48,8 @@ const remind = (db, branchId, ref, kind, message) =>
   db.prepare('INSERT OR IGNORE INTO notifications (branch_id, kind, message, ref) VALUES (?,?,?,?)').run(branchId, kind, message, ref).changes;
 
 /** Erzeugt fällige Erinnerungen (idempotent – jede Erinnerung nur einmal je Anlass). */
-export function runReminders(db, branchId, today = berlinDate()) {
-  let created = 0;
+export function runReminders(db, branchId, today = berlinDate(), now = new Date()) {
+  let created = runDailyReminders(db, branchId, now);
   const inv = inventoryStatus(db, branchId, today);
   if (inv.state === 'due') created += remind(db, branchId, `remind:inventory:due:${inv.week}`, 'inventory', `Wöchentliche Inventur ist heute fällig (${inv.week}).`);
   if (inv.state === 'overdue') created += remind(db, branchId, `remind:inventory:overdue:${inv.week}`, 'inventory', `Inventur ${inv.week} ist überfällig (fällig am ${inv.due_date}).`);

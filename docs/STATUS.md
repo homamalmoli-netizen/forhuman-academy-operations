@@ -20,6 +20,8 @@ Stand dieses Pull Requests. „Umgesetzt“ heißt: programmiert **und** durch a
 - Stationen mit Stationscheck (kritische Punkte), Stationsfreigabe, Stufen 1–5, Rolle Schichtführer
 - Positionsplan je Schicht nur mit freigegebenen Personen bzw. Einarbeitung neben Freigegebenen; Aufgaben nach Station strukturiert
 - Haltezeit-/Garzeit-Timer mit Ablaufwarnung; abgelaufen → nur Entsorgen; Übersicht zählt nicht entsorgte Ware
+- Tagesinventur Früh (17:00) / Spät (23:00) mit Pünktlichkeits-Übersicht und Erinnerungen; Fleisch-Auswertung
+- Schädlingskontrolle nach Betreiber-Vorlage; Mitarbeiter-Handbuch mit digitaler Einarbeitungsbestätigung
 
 ## Nicht umgesetzt / bewusst offen
 
@@ -29,6 +31,9 @@ Stand dieses Pull Requests. „Umgesetzt“ heißt: programmiert **und** durch a
 | Abgleich mit dem Replit-Projekt | Kein Zugriff auf das Replit-Projekt aus dieser Sitzung. Dieser Branch ist vom Prototyp in PR #2 abgeleitet und ersetzt ihn vollständig |
 | Echte Videos und Fotos in Schulungen | Müssen vom ForHuman-Team erstellt oder lizenziert werden. Aktuell Symbole statt Fotos |
 | Geräte-Anleitungen (GGM, Frymaster, Henny Penny) | Herstellerhandbücher / genaues GGM-Modell fehlen. Inhalte sind als „Entwurf – nicht zur Anwendung“ markiert; keine Drücke, Temperaturen, Ölwechsel-Schritte erfunden |
+| Marinaden-Protokoll mit fester Rezeptur (Handbuch Kap. 6) | Noch nicht gebaut. Rezepturen gehören nicht ins öffentliche Repository, sondern nur in die Datenbank – Umsetzung als nächster Schritt möglich |
+| Kassenbuch / Kassenabschluss (Handbuch Kap. 9) | Gehört ins Kassensystem (POS); hier nur als Regeltext im Handbuch |
+| Einheiten der Tagesinventur | Aus der Vorlage übernommen (Fleisch/Pommes/Panade/Marinade kg, Saucen/Öl L, Rest Stück) – bitte prüfen |
 | Haltezeiten und Garzeiten je Produkt | Nur aus Herstellerangabe / freigegebener Rezeptur / HACCP-Plan. In Produktion leer; Demo-Werte sind als fiktiv markiert |
 | Stationscheck-Listen | Eigene Entwürfe von mir (Hygiene, Sicherheit, Ablauf). Bitte fachlich prüfen und an Ihre Abläufe anpassen; Bearbeiten in der App folgt noch (aktuell in `server/seed.js`) |
 | HACCP-Grenzwerte, Öl-Grenzwert (TPM) | Nur aus Ihrem HACCP-Plan bzw. Herstellerangabe. Felder sind vorhanden, standardmäßig leer |

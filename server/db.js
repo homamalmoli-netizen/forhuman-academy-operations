@@ -443,6 +443,68 @@ const MIGRATIONS = [
   -- Erinnerungen nur einmal je Anlass erzeugen
   CREATE UNIQUE INDEX idx_notif_remind ON notifications(branch_id, ref) WHERE ref LIKE 'remind:%';
   `,
+
+  // 4: Tägliche Inventur (Früh/Spät mit Frist), Schädlingskontrolle, Handbuch-Einarbeitungsbestätigung
+  `
+  ALTER TABLE task_templates ADD COLUMN action TEXT;   -- verknüpfter Ablauf: inventory, daily_early, daily_late, pest_check
+  UPDATE task_templates SET action = link WHERE link IS NOT NULL;
+  ALTER TABLE items ADD COLUMN daily_count INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE items ADD COLUMN meat INTEGER NOT NULL DEFAULT 0;
+  CREATE TABLE daily_counts (
+    id INTEGER PRIMARY KEY,
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    work_date TEXT NOT NULL,
+    shift TEXT NOT NULL CHECK (shift IN ('early','late')),
+    deadline TEXT NOT NULL,                 -- HH:MM (Ortszeit Berlin) zum Zeitpunkt der Abgabe
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','submitted')),
+    submitted_by INTEGER REFERENCES users(id),
+    submitted_at TEXT,
+    on_time INTEGER,
+    note TEXT,
+    UNIQUE (branch_id, work_date, shift)
+  );
+  CREATE TABLE daily_count_lines (
+    count_id INTEGER NOT NULL REFERENCES daily_counts(id),
+    item_id INTEGER NOT NULL REFERENCES items(id),
+    counted REAL NOT NULL CHECK (counted >= 0),
+    marinated REAL CHECK (marinated IS NULL OR marinated >= 0),   -- Fleisch: davon mariniert
+    unusable REAL CHECK (unusable IS NULL OR unusable >= 0),      -- nicht verwendbare Ware
+    counted_by INTEGER NOT NULL REFERENCES users(id),
+    PRIMARY KEY (count_id, item_id)
+  );
+  CREATE TABLE pest_checks (
+    id INTEGER PRIMARY KEY,
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    infestation INTEGER NOT NULL,
+    exterminator_needed INTEGER NOT NULL,
+    remarks TEXT,
+    media_id INTEGER REFERENCES media(id),
+    created_by INTEGER NOT NULL REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    CHECK (infestation = 0 OR media_id IS NOT NULL)
+  );
+  CREATE TABLE pest_check_areas (
+    check_id INTEGER NOT NULL REFERENCES pest_checks(id),
+    area TEXT NOT NULL,
+    finding INTEGER NOT NULL,              -- 1 = Befall/Spuren
+    note TEXT,
+    measure TEXT,
+    done INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (check_id, area)
+  );
+  CREATE TABLE onboarding_confirmations (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    handbook_version INTEGER NOT NULL,
+    areas TEXT NOT NULL,                    -- JSON: eingewiesene Bereiche
+    trainer_id INTEGER NOT NULL REFERENCES users(id),
+    trainer_confirmed_at TEXT NOT NULL,
+    employee_confirmed_at TEXT,
+    UNIQUE (user_id, branch_id, handbook_version),
+    CHECK (user_id <> trainer_id)
+  );
+  `,
 ];
 
 export function openDb(file = ':memory:') {
