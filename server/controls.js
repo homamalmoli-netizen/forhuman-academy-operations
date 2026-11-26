@@ -9,7 +9,7 @@ import { berlinDate } from './app.js';
 // Artikel aus den Betreiberlisten. min: null = Mindestwert offen (nicht erfunden). unit: 'offen' = Einheit noch zu klären.
 export const CONTROL_LISTS = [
   { code: 'regal1', name: 'Regal 1 (Marinaden, Panade, Gewürz)', schedule: 'weekly', weekday: 1, due: '17:10', items: [
-    ['Milde Marinade', 'offen', 50], ['Pikante Marinade', 'offen', 50], ['Panda Panade', 'kg', 50], ['Pommesgewürz', 'Tüten', 3]] },
+    ['Milde Marinade', 'Tüten', 50], ['Pikante Marinade', 'Tüten', 50], ['Panda Panade (Mehl)', 'kg', 50], ['Pommesgewürz', 'Tüten', 3]] },
   { code: 'regal2', name: 'Regal 2 (Saucen, Flaschen)', schedule: 'weekly', weekday: 1, due: '17:10', items: [
     ['Knoblauch Sauce', 'Flaschen', 15], ['BBQ Sauce', 'Flaschen', 15], ['Mayo', 'Flaschen', 15], ['Ketchup', 'Flaschen', 15],
     ['Remoulade', 'Flaschen', 15], ['Mexikanische Sauce', 'Flaschen', 15], ['Cheese Sauce', 'Flaschen', 15], ['Chilli Cheese Sauce', 'Flaschen', 4],
