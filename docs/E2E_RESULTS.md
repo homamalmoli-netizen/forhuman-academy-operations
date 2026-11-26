@@ -1,6 +1,6 @@
 # End-to-End-Ergebnis
 
-Ausgeführt: 2026-11-26T23:15:12.580Z · Chrome · Handy-Ansicht 390×844
+Ausgeführt: 2026-11-26T23:40:09.971Z · Chrome · Handy-Ansicht 390×844
 
 - ✅ Startseite: Sprache wählen und Demo ohne Login
 - ✅ Öffnung: eine Aufgabe pro Bildschirm, Erledigt
@@ -45,11 +45,13 @@ Ausgeführt: 2026-11-26T23:15:12.580Z · Chrome · Handy-Ansicht 390×844
 - ✅ Schulung: Lernschritte, Prüfung mit gemischten Fragen, Ergebnis mit Erklärungen
 - ✅ Hilfe „Wie mache ich das?“ – Suche in Schulung, Handbuch, Anleitungen
 - ✅ Kontrollliste: Mitarbeiter trägt Ist-Mengen ein (0 gültig) und schließt ab
+- ✅ Zusatzkontrolle Saucen jederzeit: Unterbestand wird sofort gemeldet
 - ✅ Kontrollliste mariniertes Fleisch auf Arabisch (RTL)
 - ✅ Admin: Anleitung (SOP) mit Prüfstatus und Versionen
+- ✅ Nachbestellliste je Lieferant, Bestellung erfassen, Lieferung mit Bestandsbestätigung
 - ✅ Leitung: Kontrolllisten – Tagesübersicht, Unterbestand, Mindestwerte, Intervalle
 - ✅ Betreiber: Schulungsbereiche – Übersicht, Fragenpool, Inhalte und Fragen bearbeiten
 - ✅ Produktion: nur Anmeldung, keine Demo-Buttons, keine Standardkonten
 - ✅ Offline: keine falsche Erfolgsmeldung
 
-**49 von 49 bestanden.** Screenshots: `docs/screenshots/`
+**51 von 51 bestanden.** Screenshots: `docs/screenshots/`

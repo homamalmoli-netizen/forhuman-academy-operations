@@ -210,11 +210,28 @@ async function viewControls() {
   const __seq = renderSeq;
   let d;
   try { d = await get(`/api/controls/mine?branch=${S.branch}`); } catch (e) { return render(__seq, errorBox(e)); }
+  const lists = await get(`/api/controls/lists?branch=${S.branch}`).catch(() => []);
   render(__seq, `<h1 class="page-title">${icon('box')} ${esc(tr('my_controls'))}</h1>
+    <a class="secondary block" href="#/receive">${icon('scan')} ${esc(tr('goods_in'))}</a>
     ${d.runs.length ? `<div class="course-list">${d.runs.map((r) => `<a class="course" href="#/control/${r.id}">${icon(r.marinated ? 'prep' : 'box', 'big')}
       <div><b>${esc(r.list)}</b><small>${esc(tr('control_due'))} ${esc(r.due_time)}${r.assigned_name ? ' · ' + esc(r.assigned_name) : ''}</small></div>
       <span class="badge ${['done', 'late_done'].includes(r.state) ? 'ok' : r.state === 'open' ? 'warn' : 'change'}">${esc(tr('ctl_' + r.state))}</span></a>`).join('')}</div>`
-      : `<p class="note">${esc(tr('no_controls'))}</p>`}`);
+      : `<p class="note">${esc(tr('no_controls'))}</p>`}
+    <h2>${icon('add')} ${esc(tr('extra_check'))}</h2><p class="note">${esc(tr('extra_hint'))}</p>
+    <div class="extra-list">${lists.map((l) => `<button class="secondary" data-action="ctl-extra" data-id="${l.id}">${icon(l.marinated ? 'prep' : 'box')} ${esc(l.name)}</button>`).join('')}</div>`);
+}
+
+async function viewReceive() {
+  const __seq = renderSeq;
+  let orders;
+  try { orders = await get(`/api/stock/orders/open?branch=${S.branch}`); } catch (e) { return render(__seq, errorBox(e)); }
+  render(__seq, `<a class="back-link" href="#/controls">${icon('back')} ${esc(tr('my_controls'))}</a><h1 class="page-title">${icon('scan')} ${esc(tr('goods_in'))}</h1>
+    ${orders.map((o) => `<form data-submit="receive" data-id="${o.id}" class="card form">
+      <div class="ctl-name">${o.image_media_id ? `<img class="thumb" src="/api/media/${o.image_media_id}" alt="">` : ''}<b>${esc(o.name)}</b>
+        <small>${esc(tr('ordered'))}: ${o.qty_ordered} ${esc(o.unit)}${o.qty_received ? ` · ${esc(tr('qty_received'))}: ${o.qty_received}` : ''}${o.supplier ? ' · ' + esc(o.supplier) : ''}${o.expected_on ? ' · ' + esc(o.expected_on) : ''}</small></div>
+      <div class="grid2"><label>${esc(tr('qty_received'))} (${esc(o.unit)})<input name="qty" type="number" inputmode="decimal" step="0.01" min="0.01" required></label>
+        <label>${esc(tr('stock_after'))}<input name="stock_after" type="number" inputmode="decimal" step="0.01" min="0" required></label></div>
+      <p class="note">${esc(tr('zero_ok'))}</p><button class="primary block">${icon('check')} ${esc(tr('send'))}</button></form>`).join('') || `<p class="note">${esc(tr('no_orders'))}</p>`}`);
 }
 
 async function viewControl(id) {
@@ -223,8 +240,8 @@ async function viewControl(id) {
   try { r = await get(`/api/controls/runs/${id}`); } catch (e) { return render(__seq, errorBox(e)); }
   const done = ['done', 'late_done'].includes(r.state);
   const nowLocal = () => { const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date()).map((x) => [x.type, x.value])); return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`; };
-  const row = (i) => `<li class="ctl-item ${i.reorder ? 'below' : ''}"><div class="ctl-name"><b>${esc(i.name)}</b>
-      <small>${i.unit === 'offen' ? esc(tr('unit_open')) : esc(i.unit)} · ${i.min_qty == null ? esc(tr('min_open')) : `${esc(tr('min_qty'))} ${i.min_qty}`}</small>
+  const row = (i) => `<li class="ctl-item ${i.reorder ? 'below' : ''}"><div class="ctl-name">${i.image_media_id ? `<img class="thumb" src="/api/media/${i.image_media_id}" alt="">` : ''}<b>${esc(i.name)}</b>${i.critical ? ' <span class="badge warn">!</span>' : ''}
+      <small>${i.unit === 'offen' ? esc(tr('unit_open')) : esc(i.unit)}${i.pack_info ? ' · ' + esc(i.pack_info) : ''} · ${i.min_qty == null ? esc(tr('min_open')) : `${esc(tr('min_qty'))} ${i.min_qty}`}</small>
       ${i.reorder ? `<span class="badge change">${esc(tr('below_min'))}</span>` : ''}</div>
       <input name="qty_${i.id}" type="number" inputmode="decimal" step="0.01" min="0" required value="${i.qty ?? ''}" ${done ? 'disabled' : ''} aria-label="${esc(tr('qty_actual'))} ${esc(i.name)}">
       ${r.marinated ? `<label class="ctl-sub">${esc(tr('marinated_at'))}<input name="mat_${i.id}" type="datetime-local" value="${esc(i.marinated_at || '')}" max="${nowLocal()}" ${done ? 'disabled' : ''}></label>
@@ -806,7 +823,7 @@ async function viewOil() {
 function manageNav(active) {
   const items = [['dashboard', 'dash', 'Übersicht'], ['positions', 'store', 'Positionsplan'], ['observe', 'eye', 'Stationscheck'], ['stations', 'star', 'Stationen & Stufen'],
     ['staff', 'lock', 'Mitarbeiter & Zugänge'], ['certs', 'shield', 'Nachweise (§43/METRO)'], ['staffing', 'user', 'Besetzung & Verteilung'], ['week', 'report', 'Wochenbericht'], ['daily', 'box', 'Tagesinventur'], ['onboarding', 'shield', 'Einarbeitung'], ['problems', 'warn', 'Probleme'], ['report', 'report', 'Schichtbericht'], ['templates', 'list', 'Aufgaben-Vorlagen'], ['products', 'history', 'Haltezeiten'],
-    ['controls', 'box', 'Kontrolllisten'], ['academy', 'school', 'Schulungsbereiche'], ['training', 'school', 'Schulung & Freigaben'], ['stock', 'box', 'Bestand & Codes'], ['oil', 'oil', 'Öl-Grenzwerte'], ['audit', 'history', 'Protokoll']];
+    ['controls', 'box', 'Kontrolllisten'], ['reorder', 'box', 'Nachbestellliste'], ['academy', 'school', 'Schulungsbereiche'], ['training', 'school', 'Schulung & Freigaben'], ['stock', 'box', 'Bestand & Codes'], ['oil', 'oil', 'Öl-Grenzwerte'], ['audit', 'history', 'Protokoll']];
   if (S.me.is_admin) items.push(['recipes', 'prep', 'Rezepturen (Marinaden)'], ['sops', 'book', 'Anleitungen (SOP)'], ['users', 'user', 'Benutzer & Filialen']);
   const allowed = { dashboard: true, staffing: isShiftLead(), week: isShiftLead(), daily: isShiftLead(), onboarding: isTrainer(), positions: isShiftLead(), observe: isTrainer(), stations: isShiftLead() || isTrainer(), training: isTrainer() || isManager() };
   const visible = items.filter(([k]) => isManager() || allowed[k]);
@@ -816,7 +833,7 @@ function manageNav(active) {
 async function viewManage(sub = 'dashboard', arg) {
   const __seq = renderSeq;
   try {
-    const fn = { dashboard: mDashboard, controls: mControls, academy: mAcademy, staff: mStaff, certs: mCerts, staffing: mStaffing, week: mWeek, recipes: mRecipes, daily: mDaily, onboarding: mOnboarding, positions: mPositions, observe: mObserve, stations: mStations, products: mProducts, problems: mProblems, report: mReport, templates: mTemplates, training: mTraining, stock: mStock, oil: mOil, audit: mAudit, sops: mSops, users: mUsers }[sub] || mDashboard;
+    const fn = { dashboard: mDashboard, controls: mControls, reorder: mReorder, academy: mAcademy, staff: mStaff, certs: mCerts, staffing: mStaffing, week: mWeek, recipes: mRecipes, daily: mDaily, onboarding: mOnboarding, positions: mPositions, observe: mObserve, stations: mStations, products: mProducts, problems: mProblems, report: mReport, templates: mTemplates, training: mTraining, stock: mStock, oil: mOil, audit: mAudit, sops: mSops, users: mUsers }[sub] || mDashboard;
     const html = await fn(arg);
     render(__seq, `${manageNav(sub)}<div class="manage">${html}</div>`);
   } catch (e) { render(__seq, `${manageNav(sub)}${errorBox(e)}`); }
@@ -864,7 +881,7 @@ async function mDaily() {
 }
 
 async function mControls() {
-  const d = await get(`/api/controls?branch=${S.branch}`);
+  const [d, alerts] = await Promise.all([get(`/api/controls?branch=${S.branch}`), get(`/api/stock/alerts?branch=${S.branch}`)]);
   const st = { open: ['offen', 'warn'], overdue: ['überfällig', 'change'], done: ['erledigt', 'ok'], late_done: ['verspätet', 'warn'], rework: ['Nacharbeit', 'change'] };
   const wd = ['', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
   const rhythm = (l) => l.schedule === 'daily' ? 'täglich' : l.schedule === 'weekly' ? `wöchentlich (${wd[l.weekday]})` : `alle ${l.interval_days} Tage ab ${l.start_date}`;
@@ -874,6 +891,10 @@ async function mControls() {
   return `<h1>${icon('box')} Kontrolllisten</h1>
     <p class="note">Einfache Ist-Mengen-Kontrolle als persönliche Aufgabe – keine Buchungen, keine Preise, keine automatischen Bestellungen. Erinnerung: 10 Min. vorher, bei Fälligkeit und +5 Min. an die verantwortliche Person, +10 Min. an die Filialleitung. Kein automatischer Anruf.</p>
     <h2>Heute (${esc(d.date)})</h2><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Liste</th><th>Fällig</th><th>Status</th><th>Verantwortlich</th><th></th></tr></thead><tbody>${d.runs.map(runRow).join('') || '<tr><td colspan="5">Heute keine Kontrolle fällig.</td></tr>'}</tbody></table></div>
+    <h2>${icon('warn')} Offene Bestandsalarme</h2>${alerts.map((a) => `<div class="card alert-row ${a.level}"><b>${a.level === 'zero' ? 'KRITISCH – 0' : a.level === 'urgent' ? 'dringend' : 'unter Minimum'}</b>
+      ${esc(a.name)}: ${a.qty} ${esc(a.unit)}${a.min_qty != null ? ` / min. ${a.min_qty} · Fehlmenge ${a.shortfall}` : ' · Minimum offen'}<br><small>${esc(a.reported_name || '')} · ${fmtTime(a.created_at)}${a.ack_name ? ` · bestätigt von ${esc(a.ack_name)}` : ''}</small>
+      ${a.status === 'open' ? `<button class="small primary" data-action="alert-ack" data-id="${a.id}">Bestätigen</button>` : ''}</div>`).join('') || '<p class="note">Keine offenen Alarme.</p>'}
+    <p><a class="secondary" href="#/manage/reorder">${icon('box')} Zur Nachbestellliste</a></p>
     <h2>Unter Mindestbestand (letzte Kontrolle)</h2><ul class="plain">${d.below.map((b) => `<li>${icon('warn')} <b>${esc(b.name)}</b>: ${b.qty} / min. ${b.min_qty} ${esc(b.unit)} <small>(${esc(b.list)}, ${fmtTime(b.completed_at)})</small></li>`).join('') || '<li>Nichts unter Mindestbestand.</li>'}</ul>
     ${d.missing_min ? `<p class="banner">${icon('warn')} ${d.missing_min} Artikel ohne Mindestwert – unten eintragen (leer = offen, wird nicht erfunden).</p>` : ''}
     <h2>Temperatur-Alarm mariniertes Fleisch</h2>
@@ -883,7 +904,7 @@ async function mControls() {
     <h2>Verbrauchsfrist mariniertes Fleisch</h2>
     <form data-submit="ctl-settings" class="form card inline"><label>Stunden (aus freigegebenem HACCP-Plan, leer = offen)<input name="use_within_hours" type="number" min="1" max="168" value="${d.use_within_hours ?? ''}"></label>
       <label>Quelle<input name="source" placeholder="z. B. HACCP-Plan, Version/Datum"></label><button class="primary">Speichern</button></form>
-    <h2>Listen & Artikel</h2>
+    <h2>Listen & Artikel</h2><div class="card">${photoField('product', 'Produktbild aufnehmen')}</div>
     ${d.lists.map((l) => `<details class="card"><summary><b>${esc(l.name)}</b> · ${esc(rhythm(l))} · ${esc(l.due_times)} Uhr${l.active ? '' : ' · inaktiv'}</summary>
       <form data-submit="ctl-list" data-id="${l.id}" class="form"><div class="grid2">
         <label>Rhythmus<select name="schedule"><option value="daily" ${l.schedule === 'daily' ? 'selected' : ''}>täglich</option><option value="weekly" ${l.schedule === 'weekly' ? 'selected' : ''}>wöchentlich</option><option value="interval" ${l.schedule === 'interval' ? 'selected' : ''}>alle N Tage</option></select></label>
@@ -893,10 +914,35 @@ async function mControls() {
         <label class="check"><input type="checkbox" name="photo_required" ${l.photo_required ? 'checked' : ''}> Foto Pflicht</label><label class="check"><input type="checkbox" name="active" ${l.active ? 'checked' : ''}> aktiv</label>
         <button class="primary">Liste speichern</button></form>
       <table class="tbl"><thead><tr><th>Artikel</th><th>Einheit</th><th>Mindestwert</th><th></th></tr></thead><tbody>
-      ${l.items.map((i) => `<tr><td>${esc(i.name)}</td><td colspan="3"><form data-submit="ctl-item" data-id="${i.id}" class="inline"><input name="unit" value="${esc(i.unit)}" aria-label="Einheit" size="8">
-        <input name="min_qty" type="number" step="0.01" min="0" value="${i.min_qty ?? ''}" placeholder="offen" aria-label="Mindestwert" size="6"><button class="small">speichern</button></form></td></tr>`).join('')}</tbody></table>
+      ${l.items.map((i) => `<tr><td>${i.image_media_id ? `<img class="thumb" src="/api/media/${i.image_media_id}" alt="">` : ''}${esc(i.name)}${i.critical ? ' <span class="badge warn">zeitkritisch</span>' : ''}${i.supplier ? ` <small>${esc(i.supplier)}</small>` : ''}</td>
+        <td colspan="3"><details><summary>${esc(i.unit)} · min. ${i.min_qty ?? 'offen'}${i.urgent_below != null ? ` · dringend unter ${i.urgent_below}` : ''}</summary>
+        <form data-submit="ctl-item" data-id="${i.id}" class="form"><div class="grid2"><label>Einheit<input name="unit" value="${esc(i.unit)}"></label>
+        <label>Mindestwert (leer = offen)<input name="min_qty" type="number" step="0.01" min="0" value="${i.min_qty ?? ''}"></label>
+        <label>Dringend unter<input name="urgent_below" type="number" step="0.01" min="0" value="${i.urgent_below ?? ''}"></label><label>Zielbestand<input name="target_qty" type="number" step="0.01" min="0" value="${i.target_qty ?? ''}"></label>
+        <label>Lieferant<input name="supplier" value="${esc(i.supplier || '')}" placeholder="z. B. METRO"></label><label>Artikelnummer (nur verifiziert)<input name="article_no" value="${esc(i.article_no || '')}"></label>
+        <label>Gebinde laut Etikett<input name="pack_info" value="${esc(i.pack_info || '')}"></label></div>
+        <label class="check"><input type="checkbox" name="critical" ${i.critical ? 'checked' : ''}> zeitkritisch</label>
+        <p class="note">Produktbild: oben „Produktbild aufnehmen“, dann hier speichern.</p><button class="small primary">speichern</button></form></details></td></tr>`).join('')}</tbody></table>
       <form data-submit="ctl-item-new" data-id="${l.id}" class="inline"><input name="name" placeholder="Neuer Artikel" required aria-label="Neuer Artikel"><input name="unit" placeholder="Einheit" aria-label="Einheit" size="8"><input name="min_qty" type="number" step="0.01" min="0" placeholder="min." aria-label="Mindestwert" size="6"><button class="small primary">hinzufügen</button></form>
     </details>`).join('')}`;
+}
+
+async function mReorder() {
+  const d = await get(`/api/stock/reorder?branch=${S.branch}`);
+  const lvl = { zero: ['0 – kritisch', 'change'], urgent: ['dringend', 'change'], below: ['unter Minimum', 'warn'] };
+  const sup = Object.keys(d.groups).sort((a, b) => (a === 'METRO' ? -1 : b === 'METRO' ? 1 : a.localeCompare(b)));
+  return `<h1>${icon('box')} Nachbestellliste</h1>
+    <p class="note">Vorschlag aus der letzten Kontrolle bzw. Bestandsbestätigung: Zielbestand (sonst Minimum) minus Ist minus bereits bestellt. Es wird <b>nichts automatisch bestellt</b>; keine Preise. Eine Bestellung schließt keinen Alarm – erst ein bestätigter Bestand.</p>
+    <a class="secondary" href="/api/stock/reorder?branch=${S.branch}&format=csv">${icon('box')} Einkaufsliste als CSV</a>
+    ${sup.map((g) => `<h2>${esc(g)}</h2>${d.groups[g].map((r) => `<form data-submit="order" data-item="${r.item_id}" class="card form">
+      <div class="ctl-name">${r.image_media_id ? `<img class="thumb" src="/api/media/${r.image_media_id}" alt="">` : ''}<b>${esc(r.name)}</b> <span class="badge ${lvl[r.level][1]}">${lvl[r.level][0]}</span>${r.critical ? ' <span class="badge warn">zeitkritisch</span>' : ''}
+        <small>${esc(r.list)} · Ist ${r.qty} ${esc(r.unit)} · min. ${r.min_qty ?? 'offen'}${r.target_qty != null ? ` · Ziel ${r.target_qty}` : ''}${r.outstanding ? ` · bereits bestellt ${r.outstanding}` : ''}${r.pack_info ? ' · ' + esc(r.pack_info) : ''}${r.article_no ? ' · Art. ' + esc(r.article_no) : ''}</small></div>
+      <div class="grid2"><label>Bestellmenge (${esc(r.unit)})<input name="qty" type="number" step="0.01" min="0.01" value="${r.suggest || ''}" required></label>
+        <label>Lieferant<input name="supplier" value="${esc(r.supplier || '')}"></label><label>Erwartet am<input name="expected_on" type="date"></label></div>
+      <button class="small primary">Als bestellt erfassen</button></form>`).join('')}`).join('') || '<p class="note">Nichts nachzubestellen.</p>'}
+    <h2>Offene Bestellungen</h2><table class="tbl"><thead><tr><th>Artikel</th><th>Menge</th><th>Lieferant</th><th>Status</th><th></th></tr></thead><tbody>
+    ${d.orders.map((o) => `<tr><td>${esc(o.name)}</td><td>${o.qty_received}/${o.qty_ordered} ${esc(o.unit)}</td><td>${esc(o.supplier || '–')}${o.expected_on ? '<br><small>' + esc(o.expected_on) + '</small>' : ''}</td>
+      <td>${o.status === 'partial' ? 'Teillieferung' : 'bestellt'}<br><small>${esc(o.ordered_name)} · ${esc(o.ordered_on)}</small></td><td><button class="small" data-action="order-cancel" data-id="${o.id}">stornieren</button></td></tr>`).join('') || '<tr><td colspan="5">Keine.</td></tr>'}</tbody></table>`;
 }
 
 async function mAcademy(arg) {
@@ -1280,6 +1326,7 @@ async function route() {
     case 'welcome': return viewWelcome();
     case 'controls': return viewControls();
     case 'control': return viewControl(b);
+    case 'receive': return viewReceive();
     case 'train': return b ? viewTrainModule(b) : viewTrain();
     case 'texam': return viewTrainExam(b);
     case 'help': return viewHelp();
@@ -1321,6 +1368,9 @@ document.addEventListener('click', async (ev) => {
     if (A === 'print') return window.print();
     if (A === 'tpl-move') { await post(`/api/templates/${el.dataset.id}/move`, { dir: el.dataset.dir }); return route(); }
     if (A === 'tpl-photo') { await api('PATCH', `/api/templates/${el.dataset.id}`, { requires_photo: el.dataset.val === '1' }); return route(); }
+    if (A === 'ctl-extra') { const r = await post(`/api/controls/lists/${el.dataset.id}/extra`); location.hash = `#/control/${r.id}`; return; }
+    if (A === 'alert-ack') { await post(`/api/stock/alerts/${el.dataset.id}/ack`); S.flash = { type: 'ok', text: tr('saved') }; return route(); }
+    if (A === 'order-cancel') { await post(`/api/stock/orders/${el.dataset.id}/cancel`); S.flash = { type: 'ok', text: tr('saved') }; return route(); }
     if (A === 'note-read') { await post(`/api/notifications/${el.dataset.id}/read`); return route(); }
     if (A === 'train-start') { const r = await post(`/api/train/modules/${el.dataset.id}/start`, { branch: S.branch, lang: S.lang }); location.hash = `#/texam/${r.attempt_id}`; return; }
     if (A === 'staff-reset') { const r = await post(`/api/staff/${el.dataset.id}/reset`); S.lastInvite = { name: el.dataset.name, ...r }; S.flash = { type: 'ok', text: 'Neuer Code erstellt – altes Passwort ist ungültig.' }; return route(); }
@@ -1436,18 +1486,28 @@ document.addEventListener('submit', async (ev) => {
         const res = await post(`/api/controls/runs/${form.dataset.id}`, { lines, temperature: fd.temperature, media_id: S.photo?.purpose === 'evidence' ? S.photo.id : undefined });
         S.photo = null;
         const parts = [tr('saved')];
+        if (res.critical?.length) parts.push(`${tr('critical_zero')}: ${res.critical.join(', ')}`);
         if (res.temp_alarm) parts.push(`${tr('temp_too_high')} (max. ${res.temp_max} °C)`);
         if (res.below?.length) parts.push(`${tr('below_min')}: ${res.below.join(', ')}`);
-        S.flash = { type: res.temp_alarm ? 'error' : res.below?.length ? 'warn' : 'ok', text: parts.join(' · ') };
+        S.flash = { type: res.temp_alarm || res.critical?.length ? 'error' : res.below?.length ? 'warn' : 'ok', text: parts.join(' · ') };
         location.hash = '#/controls'; return;
       }
       case 'ctl-list': {
         await api('PUT', `/api/controls/lists/${form.dataset.id}`, { schedule: fd.schedule, weekday: fd.weekday, interval_days: fd.interval_days, start_date: fd.start_date, due_times: fd.due_times, photo_required: !!fd.photo_required, active: !!fd.active });
         S.flash = { type: 'ok', text: tr('saved') }; break;
       }
-      case 'ctl-item': await api('PUT', `/api/controls/items/${form.dataset.id}`, { unit: fd.unit, min_qty: fd.min_qty }); S.flash = { type: 'ok', text: tr('saved') }; break;
+      case 'ctl-item': {
+        const body = { unit: fd.unit, min_qty: fd.min_qty, urgent_below: fd.urgent_below, target_qty: fd.target_qty, supplier: fd.supplier, article_no: fd.article_no, pack_info: fd.pack_info, critical: !!fd.critical };
+        if (S.photo?.purpose === 'product') { body.image_media_id = S.photo.id; S.photo = null; }
+        await api('PUT', `/api/controls/items/${form.dataset.id}`, body); S.flash = { type: 'ok', text: tr('saved') }; break;
+      }
       case 'ctl-item-new': await post(`/api/controls/lists/${form.dataset.id}/items`, { name: fd.name, unit: fd.unit, min_qty: fd.min_qty }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'ctl-review': await post(`/api/controls/runs/${form.dataset.id}/review`, { ok: submitter?.value !== 'rework', note: fd.note }); S.flash = { type: 'ok', text: tr('saved') }; break;
+      case 'receive': {
+        const r = await post(`/api/stock/orders/${form.dataset.id}/receive`, { qty: fd.qty, stock_after: fd.stock_after });
+        S.flash = { type: 'ok', text: `${tr('saved')}${r.open_qty ? ` · offen: ${r.open_qty}` : ''}` }; break;
+      }
+      case 'order': await post('/api/stock/orders', { branch: S.branch, item_id: Number(form.dataset.item), qty: fd.qty, supplier: fd.supplier, expected_on: fd.expected_on }); S.flash = { type: 'ok', text: 'Bestellung erfasst – es wird nichts automatisch bestellt.' }; break;
       case 'ctl-temp': await api('PUT', '/api/controls/settings', { branch: S.branch, temp_max: fd.temp_max, temp_source: fd.temp_source }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'ctl-settings': await api('PUT', '/api/controls/settings', { branch: S.branch, use_within_hours: fd.use_within_hours, source: fd.source }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'train-exam': {

@@ -589,12 +589,22 @@ try {
     assert.match(await p.locator('.flash').innerText(), /Gespeichert/);
   });
 
+  await step('Zusatzkontrolle Saucen jederzeit: Unterbestand wird sofort gemeldet', async () => {
+    await nav(p, '#/controls');
+    await p.locator('button[data-action=ctl-extra]', { hasText: 'Regal 2' }).click();
+    await p.locator('form[data-submit=control]').waitFor();
+    const inputs = p.locator('form[data-submit=control] input[type=number]');
+    const n = await inputs.count();
+    for (let i = 0; i < n; i++) await inputs.nth(i).fill(i === 0 ? '9' : '20');
+    await p.click('form[data-submit=control] button.primary');
+    await p.locator('.flash.warn').waitFor();
+    await shot(p, '61-unterbestand-gemeldet');
+  });
+
   await step('Kontrollliste mariniertes Fleisch auf Arabisch (RTL)', async () => {
     await p.selectOption('select[data-change=lang]', 'ar').catch(() => {});
     await nav(p, '#/controls');
-    const m = p.locator('a.course', { hasText: 'Mariniertes' }).first();
-    await m.waitFor();
-    await m.click();
+    await p.locator('button[data-action=ctl-extra]', { hasText: 'Mariniertes' }).click();
     await p.locator('form[data-submit=control] input[name=temperature]').waitFor();
     assert.equal(await p.evaluate(() => document.documentElement.dir), 'rtl');
     await shotFull(p, '59-mariniert-arabisch');
@@ -614,6 +624,27 @@ try {
     await a.click('a[href="#/manage/recipes/neu"]');
     await a.locator('form[data-submit=recipe]').waitFor();
     await shotFull(a, '42-rezeptur-bearbeiten');
+  });
+
+  await step('Nachbestellliste je Lieferant, Bestellung erfassen, Lieferung mit Bestandsbestätigung', async () => {
+    await nav(a, '#/manage/controls');
+    await a.locator('.alert-row').first().waitFor();
+    await shotFull(a, '62-bestandsalarme');
+    await nav(a, '#/manage/reorder');
+    const f = a.locator('form[data-submit=order]').first();
+    await f.waitFor();
+    await shotFull(a, '63-nachbestellliste');
+    await f.locator('button').click();
+    await a.locator('.flash.ok', { hasText: 'Bestellung erfasst' }).waitFor();
+    await nav(a, '#/receive');
+    const r = a.locator('form[data-submit=receive]').first();
+    await r.waitFor();
+    await r.locator('input[name=qty]').fill('5');
+    await r.locator('input[name=stock_after]').fill('14');
+    await shot(a, '64-lieferung-annehmen');
+    await r.locator('button').click();
+    await a.locator('.flash.ok').waitFor();
+    await nav(a, '#/manage/dashboard');
   });
 
   await step('Leitung: Kontrolllisten – Tagesübersicht, Unterbestand, Mindestwerte, Intervalle', async () => {
