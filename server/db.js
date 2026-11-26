@@ -616,6 +616,39 @@ const MIGRATIONS = [
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
   `,
+  // 7: Persönliche Zugänge (Einladung, Erstpasswort, Zurücksetzen, Deaktivieren) und Nachweise (§43 IfSG, METRO-Hygieneschulung)
+  `
+  ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE users ADD COLUMN created_by INTEGER REFERENCES users(id);
+  CREATE TABLE invites (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    code_hash TEXT NOT NULL UNIQUE,
+    purpose TEXT NOT NULL CHECK (purpose IN ('invite','reset')),
+    created_by INTEGER NOT NULL REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    expires_at TEXT NOT NULL,
+    used_at TEXT
+  );
+  CREATE TABLE certificates (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    type TEXT NOT NULL CHECK (type IN ('ifsg43','metro_hygiene','ifsg_followup','other')),
+    issued_on TEXT,
+    valid_until TEXT,
+    media_id INTEGER REFERENCES media(id),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+    note TEXT,
+    uploaded_by INTEGER NOT NULL REFERENCES users(id),
+    uploaded_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    reviewed_by INTEGER REFERENCES users(id),
+    reviewed_at TEXT,
+    review_note TEXT,
+    CHECK (type = 'ifsg_followup' OR media_id IS NOT NULL)
+  );
+  CREATE INDEX idx_cert_user ON certificates(user_id, type);
+  `,
 ];
 
 export function openDb(file = ':memory:') {

@@ -305,3 +305,9 @@ a.small { text-decoration: none; }
 .event-grid small { color: var(--muted); font-weight: 400; }
 .personal-head { background: var(--black); color: #fff; border-radius: 12px; padding: 8px 12px; margin: 6px 0; }
 .change-form { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; }
+
+/* Zugänge, Nachweise */
+.invite-card { border-color: var(--gold); background: #fffaf0; }
+.invite-code { font-size: 1.9rem; font-weight: 800; letter-spacing: .08em; text-align: center; font-family: "DejaVu Sans Mono", monospace; margin: 8px 0; }
+.inactive-row td { opacity: .55; }
+.welcome-list .welcome-item { padding: 10px 0; }

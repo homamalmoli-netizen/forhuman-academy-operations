@@ -1,6 +1,6 @@
 # End-to-End-Ergebnis
 
-Ausgeführt: 2026-11-26T09:02:21.016Z · Chrome · Handy-Ansicht 390×844
+Ausgeführt: 2026-11-26T09:08:26.372Z · Chrome · Handy-Ansicht 390×844
 
 - ✅ Startseite: Sprache wählen und Demo ohne Login
 - ✅ Öffnung: eine Aufgabe pro Bildschirm, Erledigt
@@ -21,6 +21,8 @@ Ausgeführt: 2026-11-26T09:02:21.016Z · Chrome · Handy-Ansicht 390×844
 - ✅ Leitung: Schichtbericht mit Fotos und Freigabe
 - ✅ Leitung: Vorlagen-Reihenfolge ändern
 - ✅ Leitung: unbekannten Code zuordnen, Nachbestellliste
+- ✅ Zugänge: Leitung legt Konto an, Einladungscode, Mitarbeiter setzt eigenes Passwort
+- ✅ Nachweise: Leitung prüft und bestätigt §43-Belehrung
 - ✅ Filialtrennung in der Oberfläche: Leitung Leuna sieht nur Leuna
 - ✅ Schichtführer: Positionsplan nur mit freigegebenen Personen
 - ✅ Mitarbeiter: eigene Station oben, Aufgaben nach Station strukturiert
@@ -43,4 +45,4 @@ Ausgeführt: 2026-11-26T09:02:21.016Z · Chrome · Handy-Ansicht 390×844
 - ✅ Produktion: nur Anmeldung, keine Demo-Buttons, keine Standardkonten
 - ✅ Offline: keine falsche Erfolgsmeldung
 
-**40 von 40 bestanden.** Screenshots: `docs/screenshots/`
+**42 von 42 bestanden.** Screenshots: `docs/screenshots/`

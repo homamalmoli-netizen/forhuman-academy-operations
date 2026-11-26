@@ -5,7 +5,7 @@ import { randomBytes } from 'node:crypto';
 import { tx, audit } from './db.js';
 import {
   verifyPassword, hashPassword, createSession, destroySession, userFromToken, rolesIn, can, branchIdsFor,
-  loginAllowed, loginFailed, loginSucceeded,
+  loginAllowed, loginFailed, loginSucceeded, tokenHash,
 } from './auth.js';
 import { classifyCode } from '../shared/codes.js';
 import { seedTemplates, seedStations } from './seed.js';
@@ -15,6 +15,7 @@ import { registerDaily, dailyStatus } from './daily.js';
 import { registerMarinades } from './marinades.js';
 import { registerOil, oilStatus, ensureOilTemplates, oilChangeDue } from './oil.js';
 import { registerAssign, autoAssign, shiftCandidates } from './assign.js';
+import { registerAccounts, certStatus } from './accounts.js';
 
 export const LANGS = ['de', 'ar', 'en', 'tr'];
 const SHIFTS = ['open', 'run', 'close'];
@@ -171,7 +172,12 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
   };
 
   // Hilfsfunktionen innerhalb der App
-  const needUser = (ctx) => { if (!ctx.user) throw new HttpError(401, 'unauthorized', 'Bitte anmelden'); return ctx.user; };
+  const needUser = (ctx, opts = {}) => {
+    if (!ctx.user) throw new HttpError(401, 'unauthorized', 'Bitte anmelden');
+    // Erstpasswort / zurückgesetztes Passwort: erst eigenes Passwort setzen
+    if (ctx.user.must_change_password && !opts.allowPasswordChange) throw new HttpError(403, 'password_change_required', 'Bitte zuerst ein eigenes Passwort festlegen');
+    return ctx.user;
+  };
   const needBranch = (ctx, branchId, ...roles) => {
     const user = needUser(ctx);
     const b = Number(branchId);
@@ -222,12 +228,12 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
   });
   route('POST', '/api/logout', (ctx) => { destroySession(db, ctx.token); ctx.setCookie('', true); return { ok: true }; });
   route('GET', '/api/me', (ctx) => {
-    const u = needUser(ctx);
+    const u = needUser(ctx, { allowPasswordChange: true });
     const branches = branchIdsFor(db, u).map((id) => {
       const b = db.prepare('SELECT id, code, name FROM branches WHERE id = ?').get(id);
       return { ...b, roles: rolesIn(u, id) };
     });
-    return { id: u.id, username: u.username, display_name: u.display_name, is_admin: u.is_admin, lang: u.lang, branches };
+    return { id: u.id, username: u.username, display_name: u.display_name, is_admin: u.is_admin, lang: u.lang, must_change_password: u.must_change_password, branches };
   });
   route('PUT', '/api/me/lang', (ctx) => {
     const u = needUser(ctx);
@@ -241,10 +247,10 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
     const u = needUser(ctx);
     const branchId = needBranch(ctx, ctx.query.get('branch'));
     const purpose = ctx.query.get('purpose') || 'evidence';
-    if (!['evidence', 'problem', 'goods', 'oil', 'receipt'].includes(purpose)) throw bad('purpose');
+    if (!['evidence', 'problem', 'goods', 'oil', 'receipt', 'certificate'].includes(purpose)) throw bad('purpose');
     const buf = await readBody(ctx.req, 8 * 1024 * 1024);
     const mime = sniffMime(buf);
-    if (!mime || (mime === 'application/pdf' && purpose !== 'receipt')) throw bad('file_type', 'Nur JPG, PNG oder WEBP (Beleg auch PDF)');
+    if (!mime || (mime === 'application/pdf' && !['receipt', 'certificate'].includes(purpose))) throw bad('file_type', 'Nur JPG, PNG oder WEBP (Beleg/Nachweis auch PDF)');
     const key = randomBytes(18).toString('hex');
     writeFileSync(join(uploadDir, key), buf, { mode: 0o600 });
     const id = db.prepare('INSERT INTO media (branch_id, storage_key, mime, size, purpose, uploaded_by) VALUES (?,?,?,?,?,?)')
@@ -257,6 +263,8 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
     const m = db.prepare('SELECT * FROM media WHERE id = ?').get(Number(ctx.params.id));
     if (!m || m.purged_at) throw notFound();
     needBranch(ctx, m.branch_id);
+    // Persönliche Nachweise: nur die Person selbst und die Leitung der Filiale
+    if (m.purpose === 'certificate' && m.uploaded_by !== ctx.user.id && !can(ctx.user, m.branch_id, 'manager', 'admin')) throw forbidden();
     const file = join(uploadDir, m.storage_key);
     if (!existsSync(file)) throw notFound();
     ctx.res.writeHead(200, { ...SEC_HEADERS, 'Content-Type': m.mime, 'Cache-Control': 'private, max-age=3600', 'Content-Disposition': 'inline' });
@@ -554,6 +562,11 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
         marinade_batches: db.prepare("SELECT COUNT(*) n, SUM(CASE WHEN use_by IS NOT NULL AND use_by <= ? THEN 1 ELSE 0 END) expired FROM marinade_batches WHERE branch_id = ? AND status = 'active'").get(new Date().toISOString(), branchId),
         last_pest_check: db.prepare('SELECT created_at, infestation FROM pest_checks WHERE branch_id = ? ORDER BY id DESC LIMIT 1').get(branchId) || null,
         open_trainings: openTrainings(db, branchId),
+        certificates: (() => {
+          const ppl = db.prepare("SELECT DISTINCT u.id FROM memberships m JOIN users u ON u.id = m.user_id WHERE m.branch_id = ? AND m.role IN ('employee','shift_lead','trainer') AND u.active = 1").all(branchId);
+          return { missing_ifsg43: ppl.filter((p) => certStatus(db, p.id, branchId, 'ifsg43').state !== 'approved').length,
+            pending: db.prepare("SELECT COUNT(*) n FROM certificates WHERE branch_id = ? AND status = 'pending'").get(branchId).n };
+        })(),
       };
     });
   });
@@ -880,7 +893,7 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
     if (!String(display_name || '').trim()) throw bad('display_name');
     if (db.prepare('SELECT 1 FROM users WHERE username = ?').get(username)) throw new HttpError(409, 'duplicate', 'Benutzer existiert');
     return tx(db, () => {
-      const id = Number(db.prepare('INSERT INTO users (username, display_name, password_hash) VALUES (?,?,?)').run(username, String(display_name).slice(0, 80), hashPassword(password)).lastInsertRowid);
+      const id = Number(db.prepare('INSERT INTO users (username, display_name, password_hash, must_change_password, created_by) VALUES (?,?,?,1,?)').run(username, String(display_name).slice(0, 80), hashPassword(password), a.id).lastInsertRowid);
       for (const m of memberships) {
         if (!['manager', 'shift_lead', 'trainer', 'employee'].includes(m.role) || !db.prepare('SELECT 1 FROM branches WHERE id = ?').get(Number(m.branch_id))) throw bad('membership');
         db.prepare('INSERT OR IGNORE INTO memberships (user_id, branch_id, role) VALUES (?,?,?)').run(id, Number(m.branch_id), m.role);
@@ -967,6 +980,7 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
   registerMarinades({ route, db, needUser, needBranch, needAdmin, HttpError, bad, notFound, notify });
   registerOil({ route, db, needUser, needBranch, HttpError, bad, notFound, notify });
   registerAssign({ route, db, needUser, needBranch, HttpError, bad, notFound, notify });
+  registerAccounts({ route, db, needUser, needBranch, needAdmin, HttpError, bad, notFound, notify });
   route('PATCH', '/api/courses/:id', (ctx) => {
     const a = needAdmin(ctx);
     const c = db.prepare('SELECT * FROM courses WHERE id = ?').get(Number(ctx.params.id));
@@ -1006,6 +1020,7 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
     const ctx = {
       req, res, query: url.searchParams, params: {}, body: {}, token,
       ip: req.socket?.remoteAddress || '',
+      tokenHash: () => tokenHash(token),
       user: null,
       setCookie(value, clear = false) {
         const attrs = ['Path=/', 'HttpOnly', 'SameSite=Strict', clear ? 'Max-Age=0' : 'Max-Age=43200'];

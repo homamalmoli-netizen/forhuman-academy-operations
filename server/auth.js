@@ -19,6 +19,8 @@ export function verifyPassword(password, stored) {
 
 const sha = (t) => createHash('sha256').update(t).digest('hex');
 
+export const tokenHash = (t) => sha(t || '');
+
 export function createSession(db, userId) {
   const token = randomBytes(32).toString('base64url');
   const expires = new Date(Date.now() + SESSION_HOURS * 3600e3).toISOString();
@@ -32,12 +34,12 @@ export function destroySession(db, token) {
 
 export function userFromToken(db, token) {
   if (!token) return null;
-  const row = db.prepare(`SELECT u.id, u.username, u.display_name, u.is_admin, u.lang FROM sessions s JOIN users u ON u.id = s.user_id
+  const row = db.prepare(`SELECT u.id, u.username, u.display_name, u.is_admin, u.lang, u.must_change_password FROM sessions s JOIN users u ON u.id = s.user_id
     WHERE s.token_hash = ? AND s.expires_at > ? AND u.active = 1`).get(sha(token), new Date().toISOString());
   if (!row) return null;
   const memberships = db.prepare(`SELECT m.branch_id, m.role, b.name AS branch_name, b.code AS branch_code
     FROM memberships m JOIN branches b ON b.id = m.branch_id WHERE m.user_id = ? AND b.active = 1`).all(row.id);
-  return { ...row, is_admin: !!row.is_admin, memberships };
+  return { ...row, is_admin: !!row.is_admin, must_change_password: !!row.must_change_password, memberships };
 }
 
 /** Rollen einer Person in einer Filiale. Admin hat überall alle Rechte. */
