@@ -77,3 +77,9 @@ Stand dieses Pull Requests. „Umgesetzt“ heißt: programmiert **und** durch a
 - Der Betreiber bearbeitet Lernschritte, Video-Link (nur https), offene Punkte und Fragen (Status aktiv, offen oder archiviert) und markiert geprüfte Übersetzungen.
 
 **Ehrlicher Stand der Inhalte:** 600 allgemeine Fragen (10 Bereiche × 3 Stufen × 20), davon 175 Sicherheitsfragen. Sie behandeln Hygiene, Sicherheit, Abläufe, Dokumentation und Verantwortung. Rezeptwerte, Garzeiten, Geräteabläufe und Grenzwerte sind **nicht** erfunden; die Fragen verweisen auf „Vorgabe der Filiale“, „Herstelleranleitung“ oder den HACCP-Plan. Jede mitgelieferte Frage hat einen festen Schlüssel: Neue Fragen kommen auch in bestehende Datenbanken. Fragen, die der Betreiber geändert oder archiviert hat, werden dabei nie überschrieben. Rezepte, Garzeiten, Geräteabläufe und Grenzwerte sind bewusst **nicht** erfunden; sie stehen als offene Punkte im Modul. Die Übersetzungen ins Englische und Arabische sind Entwürfe und müssen fachlich geprüft werden.
+
+## Zählrhythmus, Marinieren, Wareneingang
+- Jeder Artikel wird entweder „täglich“ gezählt (Tagesinventur Früh und Spät) oder „nur wöchentlich“. Die Leitung stellt das unter **Leitung → Bestand & Codes → Zählrhythmus** um.
+- Standard: Saucen und Marinaden nur wöchentlich, alle anderen Artikel täglich. Die Wocheninventur zählt immer alle Artikel.
+- Täglich in Früh- und Spätschicht gibt es die Aufgabe „Fleisch marinieren“. Erledigen lässt sie sich erst, wenn eine neue Charge im Marinierprotokoll eingetragen ist.
+- Wöchentlich (Standard: Montag, Schichtführer) gibt es die Aufgabe „Wareneingang der Woche prüfen“. Der Wochentag lässt sich unter **Leitung → Vorlagen** ändern.

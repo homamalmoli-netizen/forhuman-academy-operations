@@ -154,6 +154,9 @@ describe('Demo-Instanz (fiktive Daten)', () => {
       const r = await trainer.post('/api/observations', { branch: LEUNA, station_id: st.id, user_id: empId, results: cl.items.map((i) => ({ item_id: i.id, ok: true })) });
       assert.equal(r.data.passed, true, JSON.stringify(r.data));
     }
+    // Die Marinier-Aufgabe der Spätschicht braucht eine neue Charge im Marinierprotokoll
+    srv.db.prepare(`INSERT INTO marinade_batches (branch_id, marinade_id, recipe_version, meat_item_id, meat_kg, ingredients, batch_code, created_by)
+      VALUES (?, (SELECT id FROM marinades LIMIT 1), 1, (SELECT id FROM items WHERE meat = 1 LIMIT 1), 1, '[]', 'TEST-CLOSE', ?)`).run(LEUNA, empId);
     const left = await completeAll(emp, LEUNA, 'close');
     assert.equal(left, null);
     const mgr = await srv.client().as('manager_leuna');
@@ -381,7 +384,8 @@ describe('Produktions-Instanz (ohne Demo)', () => {
     assert.equal(cfg.has_admin, false);
     assert.equal(srv.db.prepare('SELECT COUNT(*) n FROM users').get().n, 0);
     assert.equal(srv.db.prepare("SELECT COUNT(*) n FROM items WHERE name LIKE '%DEMO%' OR name LIKE '%fiktiv%'").get().n, 0);
-    assert.equal(srv.db.prepare('SELECT COUNT(*) n FROM items WHERE daily_count = 1').get().n, 16, 'Artikel der täglichen Inventurliste');
+    assert.equal(srv.db.prepare('SELECT COUNT(*) n FROM items').get().n, 16, 'Artikel der Inventurliste');
+    assert.equal(srv.db.prepare('SELECT COUNT(*) n FROM items WHERE daily_count = 1').get().n, 10, 'täglich gezählt (ohne Saucen und Marinaden)');
     assert.equal((await c.post('/api/login', { username: 'demo.admin', password: 'x' })).status, 401);
   });
 
