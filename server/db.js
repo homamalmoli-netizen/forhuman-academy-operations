@@ -801,10 +801,11 @@ const MIGRATIONS = [
   ALTER TABLE notifications ADD COLUMN user_id INTEGER REFERENCES users(id);
   ALTER TABLE notifications ADD COLUMN audience TEXT NOT NULL DEFAULT 'manager';
   `,
-  // 12: Einheiten vom Betreiber bestätigt (27.11.): Marinade in Tüten, Panade (Mehl) in kg.
+  // 12: Einheiten vom Betreiber bestätigt (27.11.): Marinade in Tüten, Panade (Mehl) in kg, Bacon/Sucuk in Packungen à 500 g.
   `
   UPDATE control_items SET unit = 'Tüten' WHERE unit = 'offen' AND name IN ('Milde Marinade','Pikante Marinade');
   UPDATE control_items SET name = 'Panda Panade (Mehl)' WHERE name = 'Panda Panade';
+  UPDATE control_items SET unit = 'Packungen (500 g)' WHERE unit = 'offen' AND name IN ('Bacon','Sucuk');
   `,
 ];
 

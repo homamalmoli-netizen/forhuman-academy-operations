@@ -25,7 +25,7 @@ export const CONTROL_LISTS = [
   { code: 'kueche', name: 'Küche / Burger-Zutaten', schedule: 'daily', due: '17:10', items: [
     ['Cheddar-Käsescheiben', 'Packungen', 10], ['Ziegenkäsescheiben', 'Packungen', 5], ['Parmesan', 'Packungen', 2],
     ['Wrap-Brot', 'Stück', 50], ['Brioche Buns', 'Stück', 80], ['Red Burger Buns', 'Stück', 60], ['Schwarze Burger Buns', 'Stück', 60],
-    ['Jalapeños', 'kg', 2], ['Sauergurken', 'kg', 3], ['Bacon', 'offen', 3], ['Sucuk', 'offen', 3], ['Eisberg', 'offen', null], ['Tomaten', 'offen', null]] },
+    ['Jalapeños', 'kg', 2], ['Sauergurken', 'kg', 3], ['Bacon', 'Packungen (500 g)', 3], ['Sucuk', 'Packungen (500 g)', 3], ['Eisberg', 'offen', null], ['Tomaten', 'offen', null]] },
   // Wrap-Brot steht nur in „Küche“ – keine doppelte tägliche Kontrolle
   { code: 'frisch', name: 'Frische Ware (Fleisch, Pommes)', schedule: 'daily', due: '17:10', items: [
     ['Hähnchenbrust (frisch)', 'kg', null], ['Wings (frisch)', 'kg', null], ['Unterschenkel (frisch)', 'kg', null], ['Frische Pommes', 'kg', null]] },
