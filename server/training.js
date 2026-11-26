@@ -11,6 +11,9 @@ import { LEVEL1_MORE } from './training-content-3.js';
 import { LEVEL2_MORE_A } from './training-content-4a.js';
 import { LEVEL2_MORE_B } from './training-content-4b.js';
 const LEVEL2_MORE = { ...LEVEL2_MORE_A, ...LEVEL2_MORE_B };
+import { LEVEL3_MORE_A } from './training-content-5a.js';
+import { LEVEL3_MORE_B } from './training-content-5b.js';
+const LEVEL3_MORE = { ...LEVEL3_MORE_A, ...LEVEL3_MORE_B };
 import { HANDBOOK } from './handbook.js';
 
 export const POOL_TARGET = 20;     // Ziel je Stufe
@@ -48,7 +51,7 @@ export function seedTraining(db) {
         // Jede mitgelieferte Frage hat einen festen Schlüssel (Bereich:Stufe:Nr.). Vorhandene Schlüssel werden nie
         // überschrieben – auch nicht, wenn der Betreiber die Frage geändert oder archiviert hat. Neue Fragen nur anhängen.
         const list = [...lv.questions, ...(level === 1 ? LEVEL1_MORE[a.code] || [] : MORE_QUESTIONS[a.code]?.[level] || []),
-          ...(level === 2 ? LEVEL2_MORE[a.code] || [] : [])];
+          ...(level === 2 ? LEVEL2_MORE[a.code] || [] : level === 3 ? LEVEL3_MORE[a.code] || [] : [])];
         list.forEach(([safety, langs], k) => insQ.run(mod.id, k + 1, safety, JSON.stringify(toContent(langs)), `${a.code}:${level}:${k}`));
       });
     }
