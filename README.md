@@ -39,7 +39,9 @@ Die Demo nutzt eine eigene In-Memory-Datenbank und einen temporären Foto-Ordner
 | Wöchentliche Inventur | Inventur-Tag je Filiale, automatische Erinnerung (fällig/überfällig), alle zählen mit, Abschluss nur Schichtführer/Leitung und nur vollständig, Abweichungen werden gebucht, Verlauf |
 | Pflichtschulungen | 5 Schulungen (Hygiene, Fritteuse, Wareneingang, Reinigung, Allergene), Gültigkeit einstellbar, wöchentliche Erinnerung an offene/abgelaufene Schulungen |
 | Bestand | Je Filiale über Buchungen (Wareneingang, Verderb, Inventur), Mindestbestand, Nachbestellliste, METRO-Belegnummer gegen Doppelerfassung |
-| Ölmanager | Je Fritteuse: TPM-Messung, Filtern, Wechsel – jeweils mit Pflichtfoto und Verlauf. Status nur aus Messwert + hinterlegtem Grenzwert mit Quelle; **ohne Grenzwert keine Freigabe**, kein Bezug zu Umsatz oder Kasse |
+| Ölmanager | Je Fritteuse: tägliche Prüfung (TPM, Temperatur, zulässig ja/nein, Foto); unzulässig oder Grenzwert erreicht → **gesperrt** und sofort Ölwechsel-Aufgabe. **Nächster Wechsel = letzter tatsächlicher Wechsel + Intervall** (z. B. 7 Tage); vorzeitiger Wechsel setzt neu, Filtern/Nachfüllen/Messen nicht. Wechsel mit Grund (planmäßig/vorzeitig/Qualität), Menge, Temperatur, Foto optional. Import von Messwerten (Seriennummer, Duplikatschutz, Testdaten gekennzeichnet) – siehe docs/VITO.md |
+| Reinigungsplan | Eigener Menüpunkt: täglich/wöchentlich/monatlich, „nach Benutzung“ beliebig oft; Status offen / in Arbeit / erledigt / überfällig; Verantwortlicher, Erledigungszeit, Reinigungsmittel laut Plan, Pflichtfoto konfigurierbar; Leitung gibt zur Nachreinigung zurück; überfällige Wochenreinigung bleibt sichtbar |
+| Persönliche Aufgaben | Keine Zeiterfassung. Wer in der Schicht eingeteilt ist (Positionsplan, Leitung oder „Ich arbeite in dieser Schicht“), bekommt Aufgaben automatisch und gleichmäßig nach Rolle, Schulung und Station; jede Aufgabe genau einer Person; Abwesenheit → neu verteilen; nicht zuweisbar → Meldung; Leitung kann Zuständigkeit wechseln. Intervall-Wartung ab letzter Erledigung. Wochenbericht je Filiale |
 | Leitung | Übersicht je Filiale, Probleme mit Fotos, Schichtbericht (druckbar) mit Freigabe, Vorlagen sortieren/ändern, Schulungsstatus und Freigaben, Bestand & Codes, Öl-Grenzwerte, unveränderliches Protokoll |
 | Sprachen | Deutsch, Arabisch (RTL), Englisch, Türkisch; ungeprüfte Übersetzungen werden gekennzeichnet; Vorlesen über die Sprachausgabe des Geräts |
 | Sicherheit | Passwörter mit scrypt, Sitzungen nur als Hash gespeichert, Rollen und Filialtrennung **serverseitig**, CSRF-Schutz, Login-Sperre, Upload-Prüfung nach Dateiinhalt, Fotos privat außerhalb des Web-Ordners, Aufbewahrungsfrist für Fotos, Content-Security-Policy |
@@ -49,8 +51,8 @@ Was noch fehlt, steht ehrlich in [docs/STATUS.md](docs/STATUS.md). Prüfbericht 
 ## Tests
 
 ```bash
-npm test     # 53 API- und Logiktests (node:test)
-npm run e2e  # 36 Browser-Abläufe in Chrome (Handy-Ansicht), erzeugt docs/screenshots/ und docs/E2E_RESULTS.md
+npm test     # 67 API- und Logiktests (node:test)
+npm run e2e  # 40 Browser-Abläufe in Chrome (Handy-Ansicht), erzeugt docs/screenshots/ und docs/E2E_RESULTS.md
 ```
 
 ## Echtbetrieb
@@ -60,7 +62,7 @@ Siehe [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) (STRATO VPS, HTTPS, sichere Admin
 ## Aufbau
 
 ```
-server/   index.js (Start) · app.js (API) · stations.js (Stationen, Plan, Timer) · inventory.js (Inventur, Erinnerungen) · daily.js (Tagesinventur, Schädlinge, Einarbeitung) · marinades.js · handbook.js · courses-extra.js · db.js (Schema/Migrationen) · auth.js · seed.js (Startvorlagen, Demo-Daten)
+server/   index.js (Start) · app.js (API) · stations.js (Stationen, Plan, Timer) · inventory.js (Inventur, Erinnerungen) · daily.js (Tagesinventur, Schädlinge, Einarbeitung) · marinades.js · oil.js · assign.js (Verteilung, Reinigung, Wochenbericht) · handbook.js · courses-extra.js · db.js (Schema/Migrationen) · auth.js · seed.js (Startvorlagen, Demo-Daten)
 shared/   codes.js (Barcode-/QR-Erkennung, Server + Browser)
 public/   index.html · app.js · i18n.js · icons.js · style.css · sw.js · manifest
 scripts/  create-admin.js (erster Betreiber-Account)

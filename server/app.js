@@ -13,6 +13,8 @@ import { registerStations, stationDashboard, stationAccess, myStationIds } from 
 import { registerInventory, inventoryStatus, runReminders, openTrainings } from './inventory.js';
 import { registerDaily, dailyStatus } from './daily.js';
 import { registerMarinades } from './marinades.js';
+import { registerOil, oilStatus, ensureOilTemplates, oilChangeDue } from './oil.js';
+import { registerAssign, autoAssign, shiftCandidates } from './assign.js';
 
 export const LANGS = ['de', 'ar', 'en', 'tr'];
 const SHIFTS = ['open', 'run', 'close'];
@@ -41,14 +43,33 @@ const pickLang = (obj, lang) => (obj && (obj[lang] || obj.de)) || null;
 export function generateTasks(db, branchId, date) {
   const dow = String(isoWeekday(date));
   const day = Number(date.slice(8, 10));
+  ensureOilTemplates(db, branchId);
   const tpls = db.prepare('SELECT * FROM task_templates WHERE branch_id = ? AND active = 1').all(branchId);
   const ins = db.prepare('INSERT OR IGNORE INTO task_occurrences (template_id, branch_id, shift, work_date, position) VALUES (?,?,?,?,?)');
+  const hasOpen = (tid) => !!db.prepare("SELECT 1 FROM task_occurrences WHERE template_id = ? AND status IN ('open','rework','problem')").get(tid);
   let created = 0;
   for (const t of tpls) {
-    const due = t.frequency === 'monthly' ? t.month_day === day : t.weekdays.includes(dow);
+    let due;
+    if (t.fryer_id) {
+      // Ölwechsel: fällig nach Intervall ab letztem tatsächlichem Wechsel oder sofort bei Sperre
+      due = oilChangeDue(db, t.fryer_id, date) && !hasOpen(t.id);
+    } else if (t.interval_days) {
+      // Intervall ab letzter Erledigung (z. B. Wartung alle 14 Tage)
+      const last = db.prepare("SELECT completed_at FROM task_occurrences WHERE template_id = ? AND completed_at IS NOT NULL ORDER BY completed_at DESC LIMIT 1").get(t.id);
+      const lastDate = last ? berlinDate(new Date(last.completed_at)) : null;
+      due = !hasOpen(t.id) && (!lastDate || addDays(lastDate, t.interval_days) <= date);
+    } else {
+      due = t.frequency === 'monthly' ? t.month_day === day : t.weekdays.includes(dow);
+    }
     if (due) created += ins.run(t.id, branchId, t.shift, date, t.position).changes;
   }
   return created;
+}
+
+export function addDays(dateStr, days) {
+  const d = new Date(dateStr + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
 export function qualification(db, userId, courseId, branchId, now = new Date()) {
@@ -79,6 +100,8 @@ function taskView(db, row, lang, user) {
   return {
     station_id: row.station_id ?? null, station: row.station_name ? pickLang(j(row.station_name), lang) : null,
     role: row.role || 'all', link: row.action || row.link || null,
+    overdue: row.work_date < berlinDate(), assigned_to: row.assigned_to ?? null, assigned_name: row.assigned_name ?? null, assignment_mode: row.assignment_mode ?? null,
+    started_at: row.started_at ?? null, started_by: row.started_name ?? null, cleaning_agent: row.cleaning_agent ?? null, fryer_id: row.fryer_id ?? null,
     id: row.id, status: row.status, shift: row.shift, work_date: row.work_date, position: row.position, icon: row.icon,
     category: row.category, frequency: row.frequency,
     title: pickLang(title, lang), hint: pickLang(hint, lang), title_de: title.de,
@@ -90,7 +113,8 @@ function taskView(db, row, lang, user) {
 }
 
 const OCC_SELECT = `SELECT o.*, t.title, t.hint, t.icon, t.category, t.frequency, t.requires_photo, t.measure_unit, t.limit_min, t.limit_max,
-  t.sop_id, t.required_course_id, t.station_id, t.role, t.link, t.action, s.name AS station_name, s.position AS station_pos, u.display_name AS completed_by_name,
+  t.sop_id, t.required_course_id, t.station_id, t.role, t.link, t.action, t.carry_over, t.fryer_id, t.cleaning_agent, s.name AS station_name,
+  (SELECT display_name FROM users WHERE id = o.assigned_to) AS assigned_name, (SELECT display_name FROM users WHERE id = o.started_by) AS started_name, s.position AS station_pos, u.display_name AS completed_by_name,
   (SELECT group_concat(e.media_id) FROM task_evidence e WHERE e.occurrence_id = o.id) AS photos
   FROM task_occurrences o JOIN task_templates t ON t.id = o.template_id LEFT JOIN users u ON u.id = o.completed_by
   LEFT JOIN stations s ON s.id = t.station_id`;
@@ -101,20 +125,6 @@ function stockOf(db, branchId) {
       COALESCE(s.min_qty, 0) AS min_qty
     FROM items i LEFT JOIN stock_settings s ON s.item_id = i.id AND s.branch_id = ? WHERE i.active = 1 ORDER BY i.name`).all(branchId, branchId)
     .map((r) => ({ ...r, below_min: r.qty < r.min_qty }));
-}
-
-function oilStatus(db, fryer) {
-  const last = db.prepare("SELECT * FROM oil_events WHERE fryer_id = ? AND type = 'tpm' ORDER BY id DESC LIMIT 1").get(fryer.id);
-  const lastChange = db.prepare("SELECT created_at FROM oil_events WHERE fryer_id = ? AND type = 'change' ORDER BY id DESC LIMIT 1").get(fryer.id);
-  const today = berlinDate();
-  const measuredToday = last && berlinDate(new Date(last.created_at)) === today;
-  let state = 'ok', reason = 'ok';
-  if (!last) { state = 'unknown'; reason = 'no_measurement'; }
-  else if (fryer.tpm_limit == null) { state = 'unknown'; reason = 'no_limit'; }
-  else if (last.tpm >= fryer.tpm_limit) { state = 'change'; reason = 'limit_reached'; }
-  else if (fryer.tpm_warn != null && last.tpm >= fryer.tpm_warn) { state = 'warn'; reason = 'warn_reached'; }
-  if (last && !measuredToday && state === 'ok') { state = 'warn'; reason = 'not_measured_today'; }
-  return { state, reason, last_tpm: last?.tpm ?? null, last_measured_at: last?.created_at ?? null, last_change_at: lastChange?.created_at ?? null };
 }
 
 // --- HTTP-Grundlagen ------------------------------------------------------
@@ -267,14 +277,20 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
     if (!SHIFTS.includes(shift)) throw bad('shift');
     const date = berlinDate();
     generateTasks(db, branchId, date);
-    const rows = db.prepare(`${OCC_SELECT} WHERE o.branch_id = ? AND o.work_date = ? AND o.shift = ?
-      ORDER BY CASE o.status WHEN 'rework' THEN 0 ELSE 1 END, o.position`).all(branchId, date, shift);
     runReminders(db, branchId, date);
+    const dist = autoAssign(db, branchId, date, shift, notify);
+    const rows = db.prepare(`${OCC_SELECT} WHERE o.branch_id = ? AND o.shift = ?
+      AND (o.work_date = ? OR (o.work_date < ? AND t.carry_over = 1 AND o.status IN ('open','rework')))
+      ORDER BY CASE o.status WHEN 'rework' THEN 0 ELSE 1 END, o.work_date, o.position`).all(branchId, shift, date, date);
     const L = lang(ctx);
     const mine = myStationIds(db, u.id, branchId, shift);
     const lead = can(u, branchId, 'shift_lead', 'manager', 'admin');
     // Struktur: mit Positionsplan sieht die Person nur ihre Stationen + allgemeine Aufgaben, ihre Stationen zuerst
     let tasks = rows.filter((r) => lead || (r.role || 'all') === 'all').map((r) => taskView(db, r, L, u));
+    // Persönliche Ansicht: Ist die Verteilung aktiv und die Person eingeteilt, sieht sie nur ihre eigenen Aufgaben
+    const personal = dist.active && shiftCandidates(db, branchId, date, shift).includes(u.id);
+    const teamOpen = personal ? tasks.filter((t) => t.assigned_to && t.assigned_to !== u.id && ['open', 'rework'].includes(t.status)).length : 0;
+    if (personal) tasks = tasks.filter((t) => t.assigned_to === u.id || (!t.assigned_to && !['open', 'rework'].includes(t.status) && t.completed_by === u.display_name));
     const otherCount = mine.length ? tasks.filter((t) => t.station_id && !mine.includes(t.station_id)).length : 0;
     if (mine.length) {
       tasks = tasks.filter((t) => !t.station_id || mine.includes(t.station_id));
@@ -291,7 +307,7 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
       const g = groupMap.get(key); g.total++; if (isDone(t)) g.done++;
     }
     return {
-      date, shift, my_station_ids: mine,
+      date, shift, my_station_ids: mine, personal, team_open: teamOpen, distribution_active: dist.active,
       total: tasks.length, done: tasks.filter(isDone).length,
       problems: tasks.filter((t) => t.status === 'problem').length,
       other_station_tasks: otherCount,
@@ -303,6 +319,14 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
     };
   });
 
+  route('GET', '/api/tasks/:id', (ctx) => {
+    const u = needUser(ctx);
+    const row = db.prepare(`${OCC_SELECT} WHERE o.id = ?`).get(Number(ctx.params.id));
+    if (!row) throw notFound();
+    needBranch(ctx, row.branch_id);
+    return taskView(db, row, lang(ctx), u);
+  });
+
   route('POST', '/api/tasks/:id/complete', (ctx) => {
     const u = needUser(ctx);
     const row = db.prepare(`${OCC_SELECT} WHERE o.id = ?`).get(Number(ctx.params.id));
@@ -312,7 +336,13 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
     if (row.required_course_id && !qualification(db, u.id, row.required_course_id, branchId).ok) throw new HttpError(403, 'not_qualified', 'Schulung oder praktische Freigabe fehlt');
     if (!stationAccess(db, u, row.station_id, branchId)) throw new HttpError(403, 'not_certified', 'Für diese Station nicht freigegeben');
     if (row.role === 'shift_lead' && !can(u, branchId, 'shift_lead', 'manager', 'admin')) throw new HttpError(403, 'shift_lead_only', 'Diese Aufgabe ist für Schichtführer');
+    if (row.assigned_to && row.assigned_to !== u.id && !can(u, branchId, 'manager', 'shift_lead', 'admin')) throw new HttpError(403, 'assigned_other', 'Diese Aufgabe ist einer anderen Person zugewiesen');
     const action = row.action || row.link;
+    if (action === 'oil_change') throw new HttpError(409, 'oil_change_missing', 'Ölwechsel im Ölmanager eintragen – die Aufgabe wird dann automatisch erledigt');
+    if (action === 'oil_check') {
+      const missing = db.prepare('SELECT * FROM fryers WHERE branch_id = ? AND blocked = 0').all(branchId).filter((f) => !oilStatus(db, f).measured_today);
+      if (missing.length) throw new HttpError(409, 'oil_check_missing', `Noch nicht geprüft: ${missing.map((f) => f.name).join(', ')}`);
+    }
     if (action === 'inventory' && inventoryStatus(db, branchId).state !== 'done') throw new HttpError(409, 'inventory_missing', 'Erst die Inventur dieser Woche abschließen');
     if (action === 'daily_early' || action === 'daily_late') {
       const st = dailyStatus(db, branchId)[action === 'daily_early' ? 'early' : 'late'];
@@ -437,13 +467,16 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
 
   route('GET', '/api/shift/tasks', (ctx) => {
     const u = needUser(ctx);
-    const branchId = needBranch(ctx, ctx.query.get('branch'), 'manager', 'trainer', 'admin');
+    const branchId = needBranch(ctx, ctx.query.get('branch'), 'manager', 'shift_lead', 'trainer', 'admin');
     const date = ctx.query.get('date') || berlinDate();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw bad('date');
     if (date === berlinDate()) generateTasks(db, branchId, date);
     const shift = ctx.query.get('shift');
-    return db.prepare(`${OCC_SELECT} WHERE o.branch_id = ? AND o.work_date = ? AND (? IS NULL OR o.shift = ?) ORDER BY o.shift, o.position`)
-      .all(branchId, date, shift, shift).map((r) => taskView(db, r, lang(ctx), u));
+    const today = date === berlinDate();
+    if (today && shift) autoAssign(db, branchId, date, shift, notify);
+    return db.prepare(`${OCC_SELECT} WHERE o.branch_id = ? AND (? IS NULL OR o.shift = ?)
+      AND (o.work_date = ? OR (? AND o.work_date < ? AND t.carry_over = 1 AND o.status IN ('open','rework'))) ORDER BY o.shift, o.work_date, o.position`)
+      .all(branchId, shift, shift, date, today ? 1 : 0, date).map((r) => taskView(db, r, lang(ctx), u));
   });
 
   route('POST', '/api/shifts/approve', (ctx) => {
@@ -539,9 +572,12 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
     const pos = (db.prepare('SELECT MAX(position) m FROM task_templates WHERE branch_id = ? AND shift = ?').get(branchId, shift).m || 0) + 10;
     const st = ctx.body.station_id ? db.prepare('SELECT id FROM stations WHERE id = ? AND branch_id = ?').get(Number(ctx.body.station_id), branchId)?.id : null;
     if (ctx.body.station_id && !st) throw bad('station');
-    const id = db.prepare('INSERT INTO task_templates (branch_id, shift, position, category, icon, title, hint, requires_photo, station_id) VALUES (?,?,?,?,?,?,?,?,?)')
-      .run(branchId, shift, pos, ctx.body.category || 'routine', ctx.body.icon || 'check', JSON.stringify({ de: String(title_de).trim().slice(0, 120) }),
-        JSON.stringify({ de: String(ctx.body.hint_de || '').trim().slice(0, 200) }), ctx.body.requires_photo ? 1 : 0, st ?? null).lastInsertRowid;
+    const intv = ctx.body.interval_days === '' || ctx.body.interval_days == null ? null : Number(ctx.body.interval_days);
+    if (intv != null && !(Number.isInteger(intv) && intv >= 1 && intv <= 365)) throw bad('interval_days', 'Intervall 1–365 Tage');
+    const cat = ['routine', 'hygiene', 'cleaning', 'haccp', 'equipment', 'goods', 'pest', 'maintenance', 'safety'].includes(ctx.body.category) ? ctx.body.category : 'routine';
+    const id = db.prepare('INSERT INTO task_templates (branch_id, shift, position, category, icon, title, hint, requires_photo, station_id, interval_days, carry_over) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
+      .run(branchId, shift, pos, cat, ctx.body.icon || 'check', JSON.stringify({ de: String(title_de).trim().slice(0, 120) }),
+        JSON.stringify({ de: String(ctx.body.hint_de || '').trim().slice(0, 200) }), ctx.body.requires_photo ? 1 : 0, st ?? null, intv, intv || ctx.body.carry_over ? 1 : 0).lastInsertRowid;
     audit(db, { actor: u.id, branch: branchId, action: 'create', entity: 'template', id: Number(id), payload: ctx.body });
     return { id: Number(id) };
   });
@@ -560,13 +596,17 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
       if (stationId && !db.prepare('SELECT 1 FROM stations WHERE id = ? AND branch_id = ?').get(stationId, branchId)) throw bad('station');
     }
     const role = b.role !== undefined ? (b.role === 'shift_lead' ? 'shift_lead' : 'all') : t.role;
+    const agent = b.cleaning_agent !== undefined ? String(b.cleaning_agent || '').trim().slice(0, 120) || null : t.cleaning_agent;
+    const interval = b.interval_days !== undefined ? (b.interval_days === '' || b.interval_days == null ? null : Number(b.interval_days)) : t.interval_days;
+    if (interval != null && !(Number.isInteger(interval) && interval >= 1 && interval <= 365)) throw bad('interval_days', 'Intervall 1–365 Tage');
+    const carry = b.carry_over !== undefined ? (b.carry_over ? 1 : 0) : t.carry_over;
     const fields = { role, station_id: stationId, active: b.active != null ? (b.active ? 1 : 0) : t.active, requires_photo: b.requires_photo != null ? (b.requires_photo ? 1 : 0) : t.requires_photo,
       weekdays: b.weekdays != null ? String(b.weekdays).replace(/[^1-7]/g, '') || t.weekdays : t.weekdays,
       limit_min: b.limit_min !== undefined ? (b.limit_min === null || b.limit_min === '' ? null : Number(b.limit_min)) : t.limit_min,
       limit_max: b.limit_max !== undefined ? (b.limit_max === null || b.limit_max === '' ? null : Number(b.limit_max)) : t.limit_max,
       limit_source: b.limit_source !== undefined ? String(b.limit_source || '').slice(0, 200) || null : t.limit_source };
-    db.prepare('UPDATE task_templates SET role=?, station_id=?, active=?, requires_photo=?, weekdays=?, limit_min=?, limit_max=?, limit_source=? WHERE id = ?')
-      .run(fields.role, fields.station_id, fields.active, fields.requires_photo, fields.weekdays, fields.limit_min, fields.limit_max, fields.limit_source, t.id);
+    db.prepare('UPDATE task_templates SET cleaning_agent=?, interval_days=?, carry_over=?, role=?, station_id=?, active=?, requires_photo=?, weekdays=?, limit_min=?, limit_max=?, limit_source=? WHERE id = ?')
+      .run(agent, interval, interval ? 1 : carry, fields.role, fields.station_id, fields.active, fields.requires_photo, fields.weekdays, fields.limit_min, fields.limit_max, fields.limit_source, t.id);
     audit(db, { actor: u.id, branch: branchId, action: 'update', entity: 'template', id: t.id, payload: fields });
     return { ok: true };
   });
@@ -826,58 +866,6 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
     return { ok: true };
   });
 
-  // --- Ölmanager -----------------------------------------------------------------
-  route('GET', '/api/oil', (ctx) => {
-    const branchId = needBranch(ctx, ctx.query.get('branch'));
-    return db.prepare('SELECT * FROM fryers WHERE branch_id = ? ORDER BY name').all(branchId).map((f) => ({
-      ...f, model_verified: !!f.model_verified, ...oilStatus(db, f),
-      history: db.prepare('SELECT e.id, e.type, e.tpm, e.note, e.created_at, e.media_id, u.display_name AS by FROM oil_events e JOIN users u ON u.id = e.created_by WHERE fryer_id = ? ORDER BY e.id DESC LIMIT 15').all(f.id),
-    }));
-  });
-  route('POST', '/api/oil/:id/event', (ctx) => {
-    const u = needUser(ctx);
-    const f = db.prepare('SELECT * FROM fryers WHERE id = ?').get(Number(ctx.params.id));
-    if (!f) throw notFound();
-    const branchId = needBranch(ctx, f.branch_id);
-    if (f.course_id && !qualification(db, u.id, f.course_id, branchId).ok) throw new HttpError(403, 'not_qualified', 'Schulung oder praktische Freigabe für diese Fritteuse fehlt');
-    const type = ctx.body.type;
-    if (!['tpm', 'filter', 'change'].includes(type)) throw bad('type');
-    let tpm = null;
-    if (type === 'tpm') {
-      tpm = Number(ctx.body.tpm);
-      if (ctx.body.tpm === '' || ctx.body.tpm == null || !Number.isFinite(tpm) || tpm < 0 || tpm > 100) throw bad('tpm', 'TPM-Wert 0–100 % eingeben');
-    }
-    const photo = mediaInBranch(ctx.body.media_id, branchId);
-    if (!photo) throw bad('photo_required', 'Foto ist Pflicht');
-    return tx(db, () => {
-      const id = Number(db.prepare('INSERT INTO oil_events (fryer_id, branch_id, type, tpm, media_id, note, created_by) VALUES (?,?,?,?,?,?,?)').run(f.id, branchId, type, tpm, photo, String(ctx.body.note || '').slice(0, 300) || null, u.id).lastInsertRowid);
-      const st = oilStatus(db, f);
-      if (type === 'tpm' && st.state === 'change') {
-        db.prepare("INSERT INTO problems (branch_id, source, description, media_id, reported_by) VALUES (?, 'oil', ?, ?, ?)").run(branchId, `Öl ${f.name}: TPM ${tpm} % ≥ freigegebener Grenzwert ${f.tpm_limit} %`, photo, u.id);
-        notify(db, branchId, 'oil', `Ölwechsel nötig: ${f.name}`, `fryer:${f.id}`);
-      }
-      audit(db, { actor: u.id, branch: branchId, action: 'oil_' + type, entity: 'fryer', id: f.id, payload: { tpm, event: id } });
-      return { id, status: st };
-    });
-  });
-  route('PATCH', '/api/oil/:id', (ctx) => {
-    const u = needUser(ctx);
-    const f = db.prepare('SELECT * FROM fryers WHERE id = ?').get(Number(ctx.params.id));
-    if (!f) throw notFound();
-    const branchId = needBranch(ctx, f.branch_id, 'manager', 'admin');
-    const b = ctx.body;
-    const num = (v) => (v === '' || v == null ? null : Number(v));
-    const limit = b.tpm_limit !== undefined ? num(b.tpm_limit) : f.tpm_limit;
-    const warn = b.tpm_warn !== undefined ? num(b.tpm_warn) : f.tpm_warn;
-    const source = b.limit_source !== undefined ? String(b.limit_source || '').trim() : f.limit_source;
-    if ((limit != null || warn != null) && !source) throw bad('limit_source', 'Quelle angeben (Herstellerangabe / HACCP-Plan)');
-    if ([limit, warn].some((v) => v != null && (!Number.isFinite(v) || v <= 0 || v > 100))) throw bad('tpm', 'Wert 0–100 %');
-    if (limit != null && warn != null && warn >= limit) throw bad('tpm_warn', 'Warnwert muss unter dem Grenzwert liegen');
-    db.prepare('UPDATE fryers SET tpm_limit = ?, tpm_warn = ?, limit_source = ?, oil_product = COALESCE(?, oil_product) WHERE id = ?').run(limit, warn, source || null, b.oil_product ? String(b.oil_product).slice(0, 80) : null, f.id);
-    audit(db, { actor: u.id, branch: branchId, action: 'set_oil_limits', entity: 'fryer', id: f.id, payload: { limit, warn, source } });
-    return { ok: true };
-  });
-
   // --- Admin --------------------------------------------------------------------
   route('GET', '/api/admin/users', (ctx) => {
     needAdmin(ctx);
@@ -977,6 +965,8 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
   registerInventory({ route, db, needUser, needBranch, HttpError, bad });
   registerDaily({ route, db, needUser, needBranch, HttpError, bad, can, notify });
   registerMarinades({ route, db, needUser, needBranch, needAdmin, HttpError, bad, notFound, notify });
+  registerOil({ route, db, needUser, needBranch, HttpError, bad, notFound, notify });
+  registerAssign({ route, db, needUser, needBranch, HttpError, bad, notFound, notify });
   route('PATCH', '/api/courses/:id', (ctx) => {
     const a = needAdmin(ctx);
     const c = db.prepare('SELECT * FROM courses WHERE id = ?').get(Number(ctx.params.id));

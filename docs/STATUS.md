@@ -23,6 +23,8 @@ Stand dieses Pull Requests. „Umgesetzt“ heißt: programmiert **und** durch a
 - Tagesinventur Früh (17:00) / Spät (23:00) mit Pünktlichkeits-Übersicht und Erinnerungen; Fleisch-Auswertung
 - Schädlingskontrolle nach Betreiber-Vorlage; Mitarbeiter-Handbuch mit digitaler Einarbeitungsbestätigung
 - Marinaden-Protokoll mit fester, versionierter Rezeptur, Chargen-Etikett, Restmengen und Entsorgung
+- Ölwechsel nach Intervall ab tatsächlichem Wechsel, Sperre bei unzulässigem Öl, Messwert-Import
+- Reinigungsplan als eigener Menüpunkt, persönliche faire Aufgabenverteilung, Nachreinigung, Wochenbericht
 
 ## Nicht umgesetzt / bewusst offen
 
@@ -37,6 +39,8 @@ Stand dieses Pull Requests. „Umgesetzt“ heißt: programmiert **und** durch a
 | Einheiten der Tagesinventur | Aus der Vorlage übernommen (Fleisch/Pommes/Panade/Marinade kg, Saucen/Öl L, Rest Stück) – bitte prüfen |
 | Haltezeiten und Garzeiten je Produkt | Nur aus Herstellerangabe / freigegebener Rezeptur / HACCP-Plan. In Produktion leer; Demo-Werte sind als fiktiv markiert |
 | Stationscheck-Listen | Eigene Entwürfe von mir (Hygiene, Sicherheit, Ablauf). Bitte fachlich prüfen und an Ihre Abläufe anpassen; Bearbeiten in der App folgt noch (aktuell in `server/seed.js`) |
+| VITO Live-Anbindung | Offizielle Schnittstelle nicht verifiziert (siehe docs/VITO.md); Import als Fallback gebaut |
+| Reinigungsmittel je Aufgabe | Feld vorhanden, leer – Eintrag laut Ihrem freigegebenen Reinigungsplan |
 | HACCP-Grenzwerte, Öl-Grenzwert (TPM) | Nur aus Ihrem HACCP-Plan bzw. Herstellerangabe. Felder sind vorhanden, standardmäßig leer |
 | Reinigungsmittel-Register (METRO, Dr. Becher), Dosierungen, Sicherheitsdatenblätter (#7, #8) | Konkrete Produkte, Etiketten und SDB fehlen; App verweist auf Etikett/SDB |
 | METRO-Schnittstelle, automatische Belegerkennung (OCR) | Keine verifizierte METRO-API; OCR nicht eingebaut. Beleg wird als Foto/PDF mit Belegnummer gespeichert, Zuordnung manuell |

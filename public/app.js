@@ -73,8 +73,8 @@ function shell(content, { tabs = true } = {}) {
   const r = location.hash;
   const tab = (href, ic, label) => `<a href="${href}" class="tab ${r.startsWith(href) ? 'on' : ''}">${icon(ic)}<span>${esc(label)}</span></a>`;
   const nav = tabs && S.me ? `<nav class="tabs" aria-label="Navigation">
-      ${tab('#/shift', 'list', tr('tab_tasks'))}${tab('#/timer', 'history', tr('tab_timer'))}${tab('#/learn', 'school', tr('tab_learn'))}${tab('#/goods', 'scan', tr('tab_goods'))}${tab('#/oil', 'oil', tr('tab_oil'))}
-      ${isManager() || isTrainer() || isShiftLead() ? tab('#/manage', 'dash', tr('tab_manage')) : ''}</nav>` : '';
+      ${tab('#/shift', 'list', tr('tab_tasks'))}${tab('#/cleaning', 'spray', tr('tab_cleaning'))}${tab('#/timer', 'history', tr('tab_timer'))}${tab('#/learn', 'school', tr('tab_learn'))}${tab('#/more', 'dash', tr('tab_more'))}
+      ${isManager() || isTrainer() || isShiftLead() ? tab('#/manage', 'settings', tr('tab_manage')) : ''}</nav>` : '';
   const branchName = S.me?.branches.find((b) => b.id === S.branch)?.name;
   const head = S.me ? `<header class="top">
       <div class="brand"><img src="/logo.svg" alt="" width="34" height="34"><div><b>ForHuman</b><small>${esc(tr('app_name'))}</small></div></div>
@@ -135,29 +135,13 @@ function viewStart() {
 }
 
 // --- Mitarbeiter: eine Aufgabe pro Bildschirm -----------------------------------------
-async function viewShift() {
-  const __seq = renderSeq;
-  const shiftBtns = ['open', 'run', 'close'].map((s) => `<button class="seg ${S.shift === s ? 'on' : ''}" data-action="set-shift" data-shift="${s}">${icon(s === 'open' ? 'sun' : s === 'run' ? 'run' : 'moon')}<span>${esc(tr('shift_' + s))}</span></button>`).join('');
-  let d;
-  try { d = await get(`/api/shift/next?${qs({ branch: S.branch, shift: S.shift, lang: S.lang })}`); }
-  catch (e) { return render(__seq, `<div class="segs">${shiftBtns}</div>${errorBox(e)}`); }
-  const pct = d.total ? Math.round((d.done / d.total) * 100) : 0;
-  const mine = await get(`/api/my-stations?${qs({ branch: S.branch, shift: S.shift, lang: S.lang })}`).catch(() => []);
-  const stationHead = mine.length
-    ? `<section class="station-head"><small>${esc(tr('my_station_today'))}</small><div class="chips">${mine.map((m) => `<span class="chip on">${icon(m.icon)} ${esc(m.name)}${m.training ? ` · ${esc(tr('in_training'))}` : ''}</span>`).join('')}</div></section>`
-    : `<p class="note center">${esc(tr('no_plan'))}</p>`;
-  const groups = `<div class="groups">${d.groups.map((g) => `<div class="group ${g.done === g.total ? 'complete' : ''}"><span>${g.station_id ? esc(g.station) : esc(tr('general'))}</span><b>${g.done}/${g.total}</b></div>`).join('')}</div>`;
-  const progress = `${stationHead}<div class="progress"><span>${d.done} ${esc(tr('of'))} ${d.total}</span><progress max="100" value="${pct}" aria-label="${pct}%"></progress></div>${groups}${d.other_station_tasks ? `<p class="note center">${esc(tr('other_station_tasks'))} (${d.other_station_tasks})</p>` : ''}`;
-  let body;
-  const n = d.next;
-  if (!n) {
-    body = `<section class="card center done-card">${icon('check', 'huge ok')}<h2>${esc(tr('all_done'))}</h2>${d.problems ? `<p>${esc(tr('problem_open_wait'))}</p>` : ''}</section>`;
-  } else {
-    S.current = n;
-    const sayText = `${n.title}. ${n.hint || ''}`;
-    body = `<article class="task-card ${n.status === 'rework' ? 'rework' : ''}" data-task="${n.id}">
+function taskCard(n) {
+  const sayText = `${n.title}. ${n.hint || ''}`;
+  return `<article class="task-card ${n.status === 'rework' ? 'rework' : ''}" data-task="${n.id}">
         ${n.status === 'rework' ? `<div class="tag warn">${icon('history')} ${esc(tr('rework'))}</div>` : `<div class="tag">${esc(tr('next_task'))}</div>`}
         <div class="station-tag">${n.station ? esc(n.station) : esc(tr('general'))}</div>
+        ${n.overdue ? `<div class="tag warn">${icon('warn')} ${esc(tr('overdue'))} · ${esc(new Date(n.work_date).toLocaleDateString('de-DE'))}</div>` : ''}
+        ${n.cleaning_agent ? `<p class="note">${esc(tr('cleaning_agent'))}: <b>${esc(n.cleaning_agent)}</b></p>` : ''}
         <div class="task-icon">${icon(n.icon, 'huge')}</div>
         <h1 class="task-title">${esc(n.title)}</h1>
         ${n.hint ? `<p class="task-hint">${esc(n.hint)}</p>` : ''}
@@ -169,17 +153,43 @@ async function viewShift() {
           ${n.link === 'inventory' ? `<a class="act" href="#/inventory">${icon('box')}<span>${esc(tr('open_inventory'))}</span></a>` : ''}
           ${n.link === 'daily_early' || n.link === 'daily_late' ? `<a class="act" href="#/daily/${n.link === 'daily_early' ? 'early' : 'late'}">${icon('box')}<span>${esc(tr('daily_inventory'))}</span></a>` : ''}
           ${n.link === 'pest_check' ? `<a class="act" href="#/pest">${icon('bug')}<span>${esc(tr('pest_check'))}</span></a>` : ''}
+          ${n.link === 'oil_check' || n.link === 'oil_change' ? `<a class="act" href="#/oil">${icon('oil')}<span>${esc(tr('tab_oil'))}</span></a>` : ''}
           <a class="act warn" href="#/problem/${n.id}">${icon('warn')}<span>${esc(tr('btn_problem'))}</span></a>
         </div>
         <button class="done-btn" data-action="complete" data-id="${n.id}">${icon('check')}<span>${esc(tr('btn_done'))}</span></button>
-      </article>
+      </article>`;
+}
+
+async function viewShift() {
+  const __seq = renderSeq;
+  const shiftBtns = ['open', 'run', 'close'].map((s) => `<button class="seg ${S.shift === s ? 'on' : ''}" data-action="set-shift" data-shift="${s}">${icon(s === 'open' ? 'sun' : s === 'run' ? 'run' : 'moon')}<span>${esc(tr('shift_' + s))}</span></button>`).join('');
+  let d;
+  try { d = await get(`/api/shift/next?${qs({ branch: S.branch, shift: S.shift, lang: S.lang })}`); }
+  catch (e) { return render(__seq, `<div class="segs">${shiftBtns}</div>${errorBox(e)}`); }
+  const pct = d.total ? Math.round((d.done / d.total) * 100) : 0;
+  const mine = await get(`/api/my-stations?${qs({ branch: S.branch, shift: S.shift, lang: S.lang })}`).catch(() => []);
+  const stationHead = mine.length
+    ? `<section class="station-head"><small>${esc(tr('my_station_today'))}</small><div class="chips">${mine.map((m) => `<span class="chip on">${icon(m.icon)} ${esc(m.name)}${m.training ? ` · ${esc(tr('in_training'))}` : ''}</span>`).join('')}</div></section>`
+    : d.personal ? '' : `<p class="note center">${esc(tr('no_plan'))}</p>`;
+  const groups = `<div class="groups">${d.groups.map((g) => `<div class="group ${g.done === g.total ? 'complete' : ''}"><span>${g.station_id ? esc(g.station) : esc(tr('general'))}</span><b>${g.done}/${g.total}</b></div>`).join('')}</div>`;
+  const progress = `${stationHead}<div class="progress"><span>${d.done} ${esc(tr('of'))} ${d.total}</span><progress max="100" value="${pct}" aria-label="${pct}%"></progress></div>${groups}${d.other_station_tasks ? `<p class="note center">${esc(tr('other_station_tasks'))} (${d.other_station_tasks})</p>` : ''}`;
+  const presence = d.personal
+    ? `<p class="personal-head">${icon('user')} <b>${esc(tr('my_tasks'))}</b>${d.team_open ? ` · ${d.team_open} ${esc(tr('team_open'))}` : ''}</p>`
+    : `<button class="secondary block" data-action="presence">${icon('user')} ${esc(tr('i_work_this_shift'))}</button>`;
+  let body;
+  const n = d.next;
+  if (!n) {
+    body = `<section class="card center done-card">${icon('check', 'huge ok')}<h2>${esc(tr('all_done'))}</h2>${d.problems ? `<p>${esc(tr('problem_open_wait'))}</p>` : ''}</section>`;
+  } else {
+    S.current = n;
+    body = `${taskCard(n)}
       <a class="pest-link" href="#/pest">${icon('bug')} ${esc(tr('pest_found'))}</a>`;
   }
   const trainings = d.open_trainings?.length ? `<section class="card banner-card">${icon('school')} <b>${esc(tr('open_trainings'))}</b>
       <ul class="plain">${d.open_trainings.map((o) => `<li><a href="#/learn/${o.course_id}">${esc(o.title)}</a>${o.expired ? ` <small class="badge warn">${esc(tr('expired_training'))}</small>` : ''}</li>`).join('')}</ul></section>` : '';
   const blocked = d.blocked.length ? `<section class="card muted"><h3>${icon('lock')} ${esc(tr('blocked_tasks'))}</h3>
       <ul class="plain">${d.blocked.map((b) => `<li>${icon(b.icon)} ${esc(b.title)}${b.station ? ` <small>(${esc(b.station)})</small>` : ''} ${b.reason === 'course' ? `<a href="#/learn/${b.required_course_id}">${esc(tr('tab_learn'))} →</a>` : `<small class="badge warn">${esc(tr('needs_station_check'))}</small>`}</li>`).join('')}</ul></section>` : '';
-  render(__seq, `<div class="segs">${shiftBtns}</div>${progress}${trainings}${body}${blocked}`);
+  render(__seq, `<div class="segs">${shiftBtns}</div>${presence}${progress}${trainings}${body}${blocked}`);
 }
 
 function photoField(purpose, label) {
@@ -199,6 +209,7 @@ async function completeTask(id) {
     const r = await post(`/api/tasks/${id}/complete`, body);
     S.photo = null;
     S.flash = { type: r.deviation ? 'error' : 'ok', text: r.deviation ? 'Grenzwert verletzt – Leitung ist informiert.' : tr('saved') };
+    if (location.hash.startsWith('#/task/')) { history.back(); return; }
     route();
   } catch (e) { showError(e); }
 }
@@ -481,6 +492,46 @@ async function viewPest() {
     <h2>${icon('history')} Verlauf</h2><ul class="plain">${d.history.map((h) => `<li>${fmtTime(h.created_at)} · ${esc(h.by)} · ${h.infestation ? `<b class="bad-text">Befall: ${esc(h.areas.filter((a) => a.finding).map((a) => a.area).join(', '))}</b>` : 'kein Befall'}${h.exterminator_needed ? ' · Schädlingsbekämpfer erforderlich' : ''}</li>`).join('') || '<li>–</li>'}</ul>`);
 }
 
+// --- Mehr ---------------------------------------------------------------------------------
+function viewMore() {
+  const __seq = renderSeq;
+  const b = (href, ic, label) => `<a class="big-btn" href="${href}">${icon(ic)}<span>${esc(label)}</span></a>`;
+  render(__seq, `<h1 class="page-title">${icon('dash')} ${esc(tr('tab_more'))}</h1><div class="persona-grid more-grid">
+    ${b('#/goods', 'scan', tr('tab_goods'))}${b('#/daily/early', 'sun', tr('daily_inventory') + ' ' + tr('early_shift'))}${b('#/daily/late', 'moon', tr('daily_inventory') + ' ' + tr('late_shift'))}
+    ${b('#/inventory', 'box', tr('inventory'))}${b('#/oil', 'oil', tr('tab_oil'))}${b('#/marinade', 'prep', tr('marinade'))}${b('#/pest', 'bug', tr('pest_check'))}${b('#/handbook', 'book', tr('handbook'))}
+    ${b('#/problem/', 'warn', tr('btn_problem'))}</div>`);
+}
+
+// --- Reinigungsplan ------------------------------------------------------------------------
+async function viewCleaning() {
+  const __seq = renderSeq;
+  let d;
+  try { d = await get(`/api/cleaning?${qs({ branch: S.branch, lang: S.lang })}`); } catch (e) { return render(__seq, errorBox(e)); }
+  const badge = { open: '', in_progress: 'warn', done: 'ok', overdue: 'change', rework: 'change', problem: 'change' };
+  const row = (t) => `<li class="clean-row st-${t.status}"><div class="clean-main">${icon(t.icon, 'big')}<div><b>${esc(t.title)}</b>
+      <small>${esc(tr('shift_' + t.shift))}${t.assigned ? ` · ${esc(tr('assigned_to'))}: ${esc(t.assigned)}` : ''}${t.cleaning_agent ? ` · ${esc(t.cleaning_agent)}` : ''}</small>
+      ${t.status === 'done' ? `<small>${icon('check')} ${esc(t.completed_by || '')} ${fmtTime(t.completed_at)}</small>` : ''}${t.status === 'in_progress' ? `<small>${esc(t.started_by || '')} · ${fmtTime(t.started_at)}</small>` : ''}
+      ${t.status === 'rework' && t.note ? `<small class="bad-text">${esc(t.note)}</small>` : ''}</div>
+      <span class="badge ${badge[t.status]}">${esc(tr('status_' + t.status))}</span></div>
+      ${['open', 'overdue', 'rework', 'in_progress'].includes(t.status) ? `<div class="row">${t.status !== 'in_progress' ? `<button class="small" data-action="task-start" data-id="${t.id}">${esc(tr('start_task'))}</button>` : ''}<a class="small primary" href="#/task/${t.id}">${esc(tr('do_task'))}</a></div>` : ''}</li>`;
+  const groups = ['daily', 'weekly', 'monthly'].map((f) => [f, d.tasks.filter((t) => (t.frequency === f) || (f === 'daily' && !['weekly', 'monthly'].includes(t.frequency)))]);
+  const openCount = d.tasks.filter((t) => t.status !== 'done').length;
+  render(__seq, `<h1 class="page-title">${icon('spray')} ${esc(tr('tab_cleaning'))}</h1>
+    <p class="note">${d.tasks.length - openCount}/${d.tasks.length} ${esc(tr('status_done'))} · ${d.tasks.filter((t) => t.status === 'overdue').length} ${esc(tr('status_overdue'))}</p>
+    ${groups.filter(([, arr]) => arr.length).map(([f, arr]) => `<h2>${esc(tr(f))}</h2><ul class="clean-list">${arr.sort((a, b) => ['overdue', 'rework', 'in_progress', 'open', 'problem', 'done'].indexOf(a.status) - ['overdue', 'rework', 'in_progress', 'open', 'problem', 'done'].indexOf(b.status)).map(row).join('')}</ul>`).join('')}
+    <h2>${icon('check')} ${esc(tr('after_use'))}</h2>
+    <div class="event-grid">${d.event_areas.map((a) => `<button class="secondary" data-action="clean-log" data-area="${esc(a.area)}">${esc(a.area)}<small>${a.last ? `${esc(a.last.by)} · ${fmtTime(a.last.created_at)}` : '–'}</small></button>`).join('')}</div>`);
+}
+
+async function viewTask(id) {
+  const __seq = renderSeq;
+  let n;
+  try { n = await get(`/api/tasks/${id}?lang=${S.lang}`); } catch (e) { return render(__seq, errorBox(e)); }
+  S.current = n;
+  if (!['open', 'rework'].includes(n.status)) return render(__seq, `<section class="card center">${icon('check', 'huge ok')}<h2>${esc(n.title)}</h2><p>${esc(tr('status_done'))} · ${esc(n.completed_by || '')} ${fmtTime(n.completed_at)}</p></section><button class="secondary block" data-action="back">${esc(tr('back'))}</button>`);
+  render(__seq, `${taskCard(n)}<button class="secondary block" data-action="back">${esc(tr('back'))}</button>`);
+}
+
 // --- Marinaden-Protokoll -----------------------------------------------------------------
 let marinadeSel = {}, lastBatch = null;
 function batchLabel(b) {
@@ -563,29 +614,39 @@ async function viewOil() {
   try { fryers = await get(`/api/oil?branch=${S.branch}`); } catch (e) { return render(__seq, errorBox(e)); }
   const stateLabel = (f) => ({ ok: tr('oil_ok'), warn: tr('oil_warn'), change: tr('oil_change_now'), unknown: tr('oil_unknown') }[f.state]);
   const reason = (f) => ({ no_limit: tr('oil_no_limit'), no_measurement: tr('oil_no_measure'), not_measured_today: tr('oil_not_today') }[f.reason] || '');
+  const changeInfo = (f) => f.next_change_due ? `${esc(tr('next_change'))}: <b>${new Date(f.next_change_due).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}</b>${f.change_state === 'overdue' ? ` <span class="badge change">${esc(tr('overdue'))}</span>` : f.change_state === 'due' ? ` <span class="badge warn">${esc(tr('inventory_due'))}</span>` : ''}` : f.change_interval_days ? `${esc(tr('next_change'))}: –` : '';
+  const evLabel = { tpm: 'Prüfung', filter: tr('oil_filter'), topup: tr('oil_topup'), change: tr('oil_change') };
   render(__seq, `<h1 class="page-title">${icon('oil')} ${esc(tr('tab_oil'))}</h1>
     ${fryers.map((f) => `<section class="card fryer state-${f.state}">
       <h2>${icon('fryer')} ${esc(f.name)} <span class="badge ${f.state}">${esc(stateLabel(f))}</span></h2>
+      ${f.blocked ? `<div class="banner danger">${icon('lock')} ${esc(tr('blocked_fryer'))}<br><small>${esc(f.blocked_reason || '')}</small></div>` : ''}
       <p class="meta">${esc(f.manufacturer || '')} ${esc(f.model || '')}${f.model_verified ? '' : ' · Modell nicht verifiziert'} · ${esc(f.oil_product || '')}</p>
-      <p>${f.last_tpm != null ? `TPM ${f.last_tpm} % · ${fmtTime(f.last_measured_at)}` : ''} ${f.tpm_limit != null ? `· Grenzwert ${f.tpm_limit} % (${esc(f.limit_source || '')})` : ''}</p>
-      ${reason(f) ? `<p class="note">${esc(reason(f))}</p>` : ''}
-      <form data-submit="oil" data-id="${f.id}" class="form">
-        <div class="grid2"><label>TPM %<input name="tpm" type="number" step="0.5" min="0" max="100"></label>
-        <label>Notiz<input name="note"></label></div>
+      <p>${f.last_tpm != null ? `TPM ${f.last_tpm} %` : ''}${f.last_temperature != null ? ` · ${f.last_temperature} °C` : ''}${f.last_measured_at ? ` · ${fmtTime(f.last_measured_at)}` : ''} ${f.tpm_limit != null ? `· Grenzwert ${f.tpm_limit} % (${esc(f.limit_source || '')})` : ''}</p>
+      <p>${changeInfo(f)}</p>
+      ${reason(f) && !f.blocked ? `<p class="note">${esc(reason(f))}</p>` : ''}
+      ${!f.blocked ? `<form data-submit="oil" data-id="${f.id}" class="form"><h3>${esc(tr('oil_check'))}</h3>
+        <div class="grid2"><label>TPM %<input name="tpm" type="number" inputmode="decimal" step="0.5" min="0" max="100"></label><label>${esc(tr('temperature_c'))}<input name="temperature" type="number" inputmode="decimal" step="1"></label></div>
+        <div class="yn"><label class="yes"><input type="radio" name="quality_ok" value="1"> ✓ ${esc(tr('quality_ok'))}</label><label class="no"><input type="radio" name="quality_ok" value="0"> ✗ ${esc(tr('quality_bad'))}</label></div>
         ${photoField('oil-' + f.id, tr('photo_required'))}
-        <div class="row wrap"><button class="primary" name="type" value="tpm">${esc(tr('tpm_measure'))}</button><button class="secondary" name="type" value="filter">${esc(tr('oil_filter'))}</button><button class="secondary" name="type" value="change">${esc(tr('oil_change'))}</button></div>
-      </form>
-      <details><summary>${icon('history')} Verlauf</summary><ul class="plain">${f.history.map((h) => `<li>${fmtTime(h.created_at)} · ${esc(h.type)}${h.tpm != null ? ' ' + h.tpm + ' %' : ''} · ${esc(h.by)}</li>`).join('') || '<li>–</li>'}</ul></details>
+        <div class="row wrap"><button class="primary" name="type" value="tpm">${icon('check')} ${esc(tr('oil_check'))}</button><button class="secondary" name="type" value="filter">${esc(tr('oil_filter'))}</button><button class="secondary" name="type" value="topup">${esc(tr('oil_topup'))}</button></div>
+      </form>` : ''}
+      <form data-submit="oil-change" data-id="${f.id}" class="form change-form"><h3>${icon('oil')} ${esc(tr('oil_change'))}</h3>
+        <div class="grid2">${f.blocked ? `<p>${esc(tr('oil_reason'))}: <b>${esc(tr('reason_quality'))}</b></p>` : `<label>${esc(tr('oil_reason'))}<select name="reason" required><option value="">–</option><option value="planned">${esc(tr('reason_planned'))}</option><option value="early">${esc(tr('reason_early'))}</option><option value="quality">${esc(tr('reason_quality'))}</option></select></label>`}
+          <label>${esc(tr('liters'))}<input name="quantity_l" type="number" inputmode="decimal" step="0.5" min="0.5"></label>
+          <label>TPM % (neu)<input name="tpm" type="number" step="0.5" min="0" max="100"></label><label>${esc(tr('temperature_c'))}<input name="temperature" type="number" step="1"></label></div>
+        ${photoField('oilchange-' + f.id, tr('take_photo') + ' (optional)')}
+        <button class="${f.blocked ? 'primary' : 'secondary'} block">${icon('check')} ${esc(tr('oil_change'))}</button></form>
+      <details><summary>${icon('history')} Verlauf</summary><ul class="plain">${f.history.map((h) => `<li>${fmtTime(h.at)} · <b>${esc(evLabel[h.type])}</b>${h.reason ? ` (${esc(tr('reason_' + h.reason))})` : ''}${h.tpm != null ? ` · TPM ${h.tpm} %` : ''}${h.temperature != null ? ` · ${h.temperature} °C` : ''}${h.quality_ok === 0 ? ' · <b class="bad-text">unzulässig</b>' : h.quality_ok === 1 ? ' · zulässig' : ''}${h.quantity_l ? ` · ${h.quantity_l} L` : ''} · ${esc(h.by)}${h.source === 'test' ? ' · <span class="badge warn">TESTDATEN</span>' : h.source === 'import' ? ' · Import' : ''}</li>`).join('') || '<li>–</li>'}</ul></details>
     </section>`).join('') || '<p>–</p>'}`);
 }
 
 // --- Leitung ----------------------------------------------------------------------------
 function manageNav(active) {
   const items = [['dashboard', 'dash', 'Übersicht'], ['positions', 'store', 'Positionsplan'], ['observe', 'eye', 'Stationscheck'], ['stations', 'star', 'Stationen & Stufen'],
-    ['daily', 'box', 'Tagesinventur'], ['onboarding', 'shield', 'Einarbeitung'], ['problems', 'warn', 'Probleme'], ['report', 'report', 'Schichtbericht'], ['templates', 'list', 'Aufgaben-Vorlagen'], ['products', 'history', 'Haltezeiten'],
+    ['staffing', 'user', 'Besetzung & Verteilung'], ['week', 'report', 'Wochenbericht'], ['daily', 'box', 'Tagesinventur'], ['onboarding', 'shield', 'Einarbeitung'], ['problems', 'warn', 'Probleme'], ['report', 'report', 'Schichtbericht'], ['templates', 'list', 'Aufgaben-Vorlagen'], ['products', 'history', 'Haltezeiten'],
     ['training', 'school', 'Schulung & Freigaben'], ['stock', 'box', 'Bestand & Codes'], ['oil', 'oil', 'Öl-Grenzwerte'], ['audit', 'history', 'Protokoll']];
   if (S.me.is_admin) items.push(['recipes', 'prep', 'Rezepturen (Marinaden)'], ['sops', 'book', 'Anleitungen (SOP)'], ['users', 'user', 'Benutzer & Filialen']);
-  const allowed = { dashboard: true, daily: isShiftLead(), onboarding: isTrainer(), positions: isShiftLead(), observe: isTrainer(), stations: isShiftLead() || isTrainer(), training: isTrainer() || isManager() };
+  const allowed = { dashboard: true, staffing: isShiftLead(), week: isShiftLead(), daily: isShiftLead(), onboarding: isTrainer(), positions: isShiftLead(), observe: isTrainer(), stations: isShiftLead() || isTrainer(), training: isTrainer() || isManager() };
   const visible = items.filter(([k]) => isManager() || allowed[k]);
   return `<nav class="subnav">${visible.map(([k, ic, l]) => `<a href="#/manage/${k}" class="${active === k ? 'on' : ''}">${icon(ic)} ${l}</a>`).join('')}</nav>`;
 }
@@ -593,7 +654,7 @@ function manageNav(active) {
 async function viewManage(sub = 'dashboard', arg) {
   const __seq = renderSeq;
   try {
-    const fn = { dashboard: mDashboard, recipes: mRecipes, daily: mDaily, onboarding: mOnboarding, positions: mPositions, observe: mObserve, stations: mStations, products: mProducts, problems: mProblems, report: mReport, templates: mTemplates, training: mTraining, stock: mStock, oil: mOil, audit: mAudit, sops: mSops, users: mUsers }[sub] || mDashboard;
+    const fn = { dashboard: mDashboard, staffing: mStaffing, week: mWeek, recipes: mRecipes, daily: mDaily, onboarding: mOnboarding, positions: mPositions, observe: mObserve, stations: mStations, products: mProducts, problems: mProblems, report: mReport, templates: mTemplates, training: mTraining, stock: mStock, oil: mOil, audit: mAudit, sops: mSops, users: mUsers }[sub] || mDashboard;
     const html = await fn(arg);
     render(__seq, `${manageNav(sub)}<div class="manage">${html}</div>`);
   } catch (e) { render(__seq, `${manageNav(sub)}${errorBox(e)}`); }
@@ -637,6 +698,39 @@ async function mDaily() {
       ${r.meat.lines.map((l) => `<tr><td>${esc(l.item)}</td><td>${l.start ?? '–'}</td><td>${l.incoming ?? '–'}</td><td><b>${l.usage ?? '–'}</b></td><td>${l.rest} ${esc(l.unit)}</td><td>${l.marinated ?? '–'}</td><td>${l.unusable ?? '–'}</td></tr>`).join('')}</tbody></table>
       <p class="note">Verbrauch = Anfangsbestand + Zugang (Wareneingang) − Restbestand − nicht verwendbare Ware.</p>` : ''}
     ${isManager() ? `<h2>Fristen</h2><form data-submit="daily-settings" class="inline card"><label>Frühschicht bis<input name="early" type="time" value="${esc(r.deadlines.early)}"></label><label>Spätschicht bis<input name="late" type="time" value="${esc(r.deadlines.late)}"></label><button class="small primary">Speichern</button></form>` : ''}`;
+}
+
+async function mStaffing(arg) {
+  const sh = ['open', 'run', 'close'].includes(arg) ? arg : S.shift;
+  const [p, tasks] = await Promise.all([get(`/api/presence?${qs({ branch: S.branch, shift: sh })}`), get(`/api/shift/tasks?${qs({ branch: S.branch, shift: sh })}`)]);
+  const present = p.people.filter((x) => x.present);
+  const statusDE = { open: 'offen', rework: 'Nacharbeit', done: 'erledigt', approved: 'freigegeben', problem: 'Problem' };
+  return `<h1>${icon('user')} Besetzung & Aufgabenverteilung</h1>
+    <div class="segs">${['open', 'run', 'close'].map((s) => `<a class="seg ${s === sh ? 'on' : ''}" href="#/manage/staffing/${s}">${SHIFT_DE[s]}</a>`).join('')}</div>
+    <p class="note">Keine Zeiterfassung – nur wer in dieser Schicht eingeteilt ist. Aufgaben werden automatisch und gleichmäßig an eingeteilte, qualifizierte Personen verteilt. Bei Abwesenheit wird neu verteilt.</p>
+    <table class="tbl"><thead><tr><th>Person</th><th>Status</th><th>offen</th><th>erledigt</th><th></th></tr></thead><tbody>
+    ${p.people.map((x) => `<tr><td>${esc(x.display_name)}</td><td>${x.status === 'absent' ? '<span class="badge change">abwesend</span>' : x.present ? '<span class="badge ok">eingeteilt</span>' : '–'}</td><td>${x.open_tasks}</td><td>${x.done_tasks}</td>
+      <td>${x.present ? `<button class="small" data-action="presence-set" data-shift="${sh}" data-user="${x.id}" data-status="absent">abwesend</button>` : `<button class="small primary" data-action="presence-set" data-shift="${sh}" data-user="${x.id}" data-status="present">einteilen</button>`}</td></tr>`).join('')}</tbody></table>
+    <h2>Aufgaben dieser Schicht</h2>
+    <table class="tbl"><thead><tr><th>Aufgabe</th><th>Status</th><th>Zuständig</th></tr></thead><tbody>
+    ${tasks.map((t) => `<tr class="st-${t.status}"><td>${icon(t.icon)} ${esc(t.title)}${t.overdue ? ' <span class="badge change">überfällig</span>' : ''}${t.role === 'shift_lead' ? ' <small>(Schichtführer)</small>' : ''}</td><td>${esc(statusDE[t.status] || t.status)}${t.completed_by ? `<br><small>${esc(t.completed_by)} ${fmtTime(t.completed_at)}</small>` : ''}</td>
+      <td>${['open', 'rework'].includes(t.status) ? `<select class="small-select" data-change="task-assign" data-id="${t.id}"><option value="">– nicht zugewiesen –</option>${present.map((x) => `<option value="${x.id}" ${x.id === t.assigned_to ? 'selected' : ''}>${esc(x.display_name)}</option>`).join('')}</select>${t.assignment_mode === 'manual' ? ' <small>manuell</small>' : ''}`
+        : ['done', 'approved'].includes(t.status) ? `<input id="return-${t.id}" class="small-select" placeholder="Grund"><button class="small" data-action="task-return" data-id="${t.id}">zurückgeben</button>` : ''}</td></tr>`).join('')}</tbody></table>`;
+}
+
+async function mWeek(arg) {
+  const w = await get(`/api/reports/week?${qs({ branch: S.branch, week: arg })}`);
+  const ds = { none: '–', open: 'offen', on_time: '✓', late_done: 'verspätet', missed: '✗' };
+  return `<h1>${icon('report')} Wochenbericht ${esc(w.branch)} · ${esc(w.week)}</h1><p class="note">${new Date(w.from).toLocaleDateString('de-DE')} – ${new Date(w.to).toLocaleDateString('de-DE')}</p>
+    <table class="tbl"><thead><tr><th>Tag</th><th>erledigt</th><th>offen</th><th>Problem</th><th>Tagesinv. Früh</th><th>Spät</th></tr></thead><tbody>
+    ${w.days.map((d) => `<tr><td>${new Date(d.date).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}</td><td>${d.done}/${d.total}</td><td>${d.open}</td><td>${d.problem}</td><td>${ds[d.daily_early]}</td><td>${ds[d.daily_late]}</td></tr>`).join('')}</tbody></table>
+    <div class="stats"><article class="stat"><small>Reinigung</small><b>${w.cleaning.done}/${w.cleaning.total}</b></article><article class="stat"><small>Probleme</small><b>${w.problems.opened}</b><span>${w.problems.resolved} gelöst</span></article>
+      <article class="stat ${w.weekly_inventory !== 'submitted' ? 'bad' : ''}"><small>Wochen-Inventur</small><b>${w.weekly_inventory === 'submitted' ? 'erledigt' : 'offen'}</b></article><article class="stat ${w.pest.infestations ? 'bad' : ''}"><small>Schädlingskontrollen</small><b>${w.pest.checks}</b><span>${w.pest.infestations} mit Befund</span></article></div>
+    <h2>Erledigt je Person</h2><ul class="plain">${w.people.map((p) => `<li>${esc(p.name)}: ${p.n}</li>`).join('') || '<li>–</li>'}</ul>
+    <h2>Offen je Verantwortlichem</h2><ul class="plain">${w.open_assigned.map((p) => `<li>${esc(p.name)}: ${p.n}</li>`).join('') || '<li>–</li>'}</ul>
+    <h2>Überfällig</h2><ul class="plain">${w.overdue.map((o) => `<li>${new Date(o.work_date).toLocaleDateString('de-DE')} · ${esc(o.title)}${o.assigned ? ' · ' + esc(o.assigned) : ''}</li>`).join('') || '<li>–</li>'}</ul>
+    <h2>Öl (Wechsel/Filtern)</h2><ul class="plain">${w.oil.map((o) => `<li>${fmtTime(o.at)} · ${esc(o.name)} · ${o.type === 'change' ? 'Wechsel' : 'Filtern'}${o.reason ? ' (' + esc({ planned: 'planmäßig', early: 'vorzeitig', quality: 'Qualität' }[o.reason]) + ')' : ''} · ${esc(o.by)}</li>`).join('') || '<li>–</li>'}</ul>
+    <button class="secondary" data-action="print">Drucken / PDF</button>`;
 }
 
 async function mRecipes(arg) {
@@ -780,11 +874,15 @@ async function mTemplates() {
         <button class="small" data-action="tpl-active" data-id="${tp.id}" data-val="${tp.active ? 0 : 1}">${tp.active ? 'aktiv' : 'aus'}</button>
         <button class="small ${tp.role === 'shift_lead' ? 'on' : ''}" data-action="tpl-role" data-id="${tp.id}" data-val="${tp.role === 'shift_lead' ? 'all' : 'shift_lead'}">${tp.role === 'shift_lead' ? 'Schichtführer' : 'alle'}</button>
         ${stationSel(tp)}
+        ${tp.category === 'cleaning' ? `<input class="small-select" data-change="tpl-agent" data-id="${tp.id}" value="${esc(tp.cleaning_agent || '')}" placeholder="Reinigungsmittel (laut Plan)" aria-label="Reinigungsmittel">` : ''}
+        ${tp.interval_days ? `<small class="badge">alle ${tp.interval_days} Tage</small>` : ''}
       </span></li>`).join('')}</ul>`).join('')}
     <h2>Neue Aufgabe</h2><form data-submit="tpl-new" class="form"><div class="grid2">
       <label>Schicht<select name="shift"><option value="open">Öffnung</option><option value="run">Betrieb</option><option value="close">Schließung</option></select></label>
       <label>Titel (kurz)<input name="title_de" required maxlength="120"></label><label>Hinweis (ein Satz)<input name="hint_de" maxlength="200"></label>
       <label>Station<select name="station_id"><option value="">Allgemein</option>${st.stations.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></label>
+      <label>Bereich<select name="category"><option value="routine">Routine</option><option value="cleaning">Reinigung</option><option value="maintenance">Wartung</option><option value="hygiene">Hygiene</option><option value="haccp">HACCP</option></select></label>
+      <label>Intervall in Tagen ab letzter Erledigung (optional, z. B. Wartung)<input name="interval_days" type="number" min="1" max="365"></label>
       <label class="check"><input type="checkbox" name="requires_photo"> Foto Pflicht</label></div><button class="primary">${icon('add')} Anlegen</button></form>`;
 }
 
@@ -819,8 +917,15 @@ async function mOil() {
     ${fryers.map((f) => `<form data-submit="oil-limits" data-id="${f.id}" class="card form"><h2>${esc(f.name)} <small>${esc(f.manufacturer || '')} ${esc(f.model || '')}</small></h2><div class="grid2">
       <label>Wechsel ab TPM %<input name="tpm_limit" type="number" step="0.5" min="1" max="100" value="${f.tpm_limit ?? ''}"></label>
       <label>Warnung ab TPM %<input name="tpm_warn" type="number" step="0.5" min="1" max="100" value="${f.tpm_warn ?? ''}"></label>
-      <label>Quelle (Pflicht)<input name="limit_source" value="${esc(f.limit_source || '')}"></label><label>Ölprodukt<input name="oil_product" value="${esc(f.oil_product || '')}"></label></div>
-      <button class="primary">Speichern</button></form>`).join('')}`;
+      <label>Quelle (Pflicht)<input name="limit_source" value="${esc(f.limit_source || '')}"></label><label>Ölprodukt<input name="oil_product" value="${esc(f.oil_product || '')}"></label>
+      <label>Ölwechsel-Intervall (Tage)<input name="change_interval_days" type="number" min="1" max="60" value="${f.change_interval_days ?? ''}"></label>
+      <label>Seriennummer Messgerät (für Import)<input name="device_serial" value="${esc(f.device_serial || '')}"></label></div>
+      <p class="note">Nächster Wechsel = letzter tatsächlicher Wechsel + Intervall. Filtern/Nachfüllen/Messen setzen den Termin nicht zurück. ${f.next_change_due ? 'Nächster: ' + new Date(f.next_change_due).toLocaleDateString('de-DE') : ''}</p>
+      <button class="primary">Speichern</button></form>`).join('')}
+    <h2>Messwerte importieren</h2>
+    <p class="note">Für Berichts-Exporte eines Messgeräts (z. B. VITO). Eine offizielle Live-Schnittstelle ist noch nicht geprüft – siehe docs/VITO.md. Format je Zeile: <code>Seriennummer;Zeitpunkt (ISO);TPM;Temperatur</code>. Doppelte Messungen werden übersprungen.</p>
+    <form data-submit="oil-import" class="form"><textarea name="csv" rows="4" placeholder="DEMO-SN-1;2026-11-26T08:00:00Z;14;175"></textarea>
+      <label class="check"><input type="checkbox" name="test"> Testdaten (werden gekennzeichnet und sperren nichts)</label><button class="primary">Importieren</button></form>`;
 }
 
 async function mAudit() {
@@ -878,6 +983,9 @@ async function route() {
     case 'pest': return viewPest();
     case 'handbook': return viewHandbook();
     case 'marinade': return viewMarinade();
+    case 'more': return viewMore();
+    case 'cleaning': return viewCleaning();
+    case 'task': return viewTask(b);
     case 'goods': return viewGoods();
     case 'oil': return viewOil();
     case 'problem': return viewProblem(b);
@@ -914,6 +1022,11 @@ document.addEventListener('click', async (ev) => {
     if (A === 'print') return window.print();
     if (A === 'tpl-move') { await post(`/api/templates/${el.dataset.id}/move`, { dir: el.dataset.dir }); return route(); }
     if (A === 'tpl-photo') { await api('PATCH', `/api/templates/${el.dataset.id}`, { requires_photo: el.dataset.val === '1' }); return route(); }
+    if (A === 'presence') { await post('/api/presence', { branch: S.branch, shift: S.shift }); S.flash = { type: 'ok', text: tr('saved') }; return route(); }
+    if (A === 'task-start') { await post(`/api/tasks/${el.dataset.id}/start`); return route(); }
+    if (A === 'clean-log') { await post('/api/cleaning/log', { branch: S.branch, area: el.dataset.area }); S.flash = { type: 'ok', text: tr('saved') }; return route(); }
+    if (A === 'presence-set') { await post('/api/presence', { branch: S.branch, shift: el.dataset.shift, user_id: Number(el.dataset.user), status: el.dataset.status }); S.flash = { type: 'ok', text: 'Besetzung geändert – Aufgaben neu verteilt' }; return route(); }
+    if (A === 'task-return') { const note = document.getElementById('return-' + el.dataset.id)?.value; await post(`/api/tasks/${el.dataset.id}/return`, { note }); S.flash = { type: 'ok', text: 'Zur Nacharbeit zurückgegeben' }; return route(); }
     if (A === 'onboarding-confirm') { await post('/api/onboarding/confirm', { branch: S.branch }); S.flash = { type: 'ok', text: tr('saved') }; return route(); }
     if (A === 'tpl-role') { await api('PATCH', `/api/templates/${el.dataset.id}`, { role: el.dataset.val }); return route(); }
     if (A === 'tpl-active') { await api('PATCH', `/api/templates/${el.dataset.id}`, { active: el.dataset.val === '1' }); return route(); }
@@ -943,6 +1056,8 @@ document.addEventListener('change', async (ev) => {
   try {
     if (C === 'lang') { setLang(el.value); return route(); }
     if (C === 'branch') { S.branch = Number(el.value); localStorage.setItem('fh_branch', S.branch); return route(); }
+    if (C === 'tpl-agent') { await api('PATCH', `/api/templates/${el.dataset.id}`, { cleaning_agent: el.value }); S.flash = { type: 'ok', text: tr('saved') }; return route(); }
+    if (C === 'task-assign') { await post(`/api/tasks/${el.dataset.id}/assign`, { user_id: el.value ? Number(el.value) : null }); S.flash = { type: 'ok', text: 'Zuständigkeit geändert' }; return route(); }
     if (C === 'marinade-recipe') { marinadeSel.recipe = el.value; return route(); }
     if (C === 'marinade-kg') { marinadeSel.kg = el.value; marinadeSel.meat = el.form?.meat_item_id?.value; lastBatch = null; return route(); }
     if (C === 'observe-station') { observeSel.station = el.value; return route(); }
@@ -998,14 +1113,26 @@ document.addEventListener('submit', async (ev) => {
       }
       case 'oil': {
         const purpose = 'oil-' + form.dataset.id;
-        await post(`/api/oil/${form.dataset.id}/event`, { type: submitter?.value || 'tpm', tpm: fd.tpm, note: fd.note, media_id: S.photo?.purpose === purpose ? S.photo.id : undefined });
+        const r = await post(`/api/oil/${form.dataset.id}/event`, { type: submitter?.value || 'tpm', tpm: fd.tpm, temperature: fd.temperature, quality_ok: fd.quality_ok ?? '', media_id: S.photo?.purpose === purpose ? S.photo.id : undefined });
+        S.photo = null; S.flash = r.status.blocked ? { type: 'error', text: tr('blocked_fryer') } : { type: 'ok', text: tr('saved') }; break;
+      }
+      case 'oil-change': {
+        const purpose = 'oilchange-' + form.dataset.id;
+        await post(`/api/oil/${form.dataset.id}/event`, { type: 'change', reason: fd.reason, quantity_l: fd.quantity_l, tpm: fd.tpm, temperature: fd.temperature, media_id: S.photo?.purpose === purpose ? S.photo.id : undefined });
         S.photo = null; S.flash = { type: 'ok', text: tr('saved') }; break;
+      }
+      case 'oil-import': {
+        const rows = String(fd.csv || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map((l) => l.split(/[;,\t]/).map((x) => x.trim()))
+          .filter((c) => c.length >= 3 && !/serien|serial/i.test(c[0])).map((c) => ({ device_serial: c[0], measured_at: c[1], tpm: c[2], temperature: c[3] ?? '' }));
+        const r = await post('/api/oil/import', { branch: S.branch, rows, source: fd.test ? 'test' : 'import' });
+        S.flash = { type: 'ok', text: `Import: ${r.imported} neu, ${r.duplicates} doppelt, ${r.invalid} ungültig${r.unknown_devices.length ? ', unbekannte Geräte: ' + r.unknown_devices.join(', ') : ''}${r.blocked.length ? ' · GESPERRT: ' + r.blocked.join(', ') : ''}` };
+        break;
       }
       case 'count': { const r = await post('/api/stock/count', { branch: S.branch, item_id: Number(form.dataset.item), counted: fd.counted }); S.flash = { type: 'ok', text: `Inventur gebucht (Differenz ${r.diff})` }; break; }
       case 'waste': await post('/api/stock/movement', { branch: S.branch, item_id: Number(form.dataset.item), type: 'waste', quantity: fd.quantity, note: fd.note }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'problem-action': await post(`/api/problems/${form.dataset.id}/${submitter?.value === 'rework' ? 'rework' : 'resolve'}`, { note: fd.note }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'approve-shift': await post('/api/shifts/approve', { branch: S.branch, shift: form.dataset.shift, date: form.dataset.date, note: fd.note }); S.flash = { type: 'ok', text: 'Schicht freigegeben' }; break;
-      case 'tpl-new': await post('/api/templates', { branch: S.branch, shift: fd.shift, title_de: fd.title_de, hint_de: fd.hint_de, requires_photo: !!fd.requires_photo, station_id: fd.station_id || null }); S.flash = { type: 'ok', text: tr('saved') }; break;
+      case 'tpl-new': await post('/api/templates', { branch: S.branch, shift: fd.shift, title_de: fd.title_de, hint_de: fd.hint_de, requires_photo: !!fd.requires_photo, station_id: fd.station_id || null, category: fd.category, interval_days: fd.interval_days }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'assign-code': await post(`/api/goods/unknown/${form.dataset.id}/assign`, { item_id: Number(fd.item_id) }); S.flash = { type: 'ok', text: 'Code zugeordnet' }; break;
       case 'item-new': await post('/api/items', { ...fd, branch: S.branch, needs_temperature: !!fd.needs_temperature }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'receipt-doc': await post('/api/goods/documents', { branch: S.branch, receipt_no: fd.receipt_no, media_id: S.photo?.purpose === 'receipt' ? S.photo.id : undefined }); S.photo = null; S.flash = { type: 'ok', text: tr('saved') }; break;
