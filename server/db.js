@@ -549,6 +549,73 @@ const MIGRATIONS = [
   );
   CREATE INDEX idx_batches_branch ON marinade_batches(branch_id, status);
   `,
+
+  // 6: Ölwechsel-Intervall, gesperrte Fritteuse, Messwert-Import; Reinigung/Intervall-Aufgaben; persönliche Aufgabenverteilung
+  `
+  -- oil_events neu: Foto beim Wechsel optional, neue Typen (topup), Grund/Menge/Temperatur, Quelle (manuell/Import)
+  CREATE TABLE oil_events_new (
+    id INTEGER PRIMARY KEY,
+    fryer_id INTEGER NOT NULL REFERENCES fryers(id),
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    type TEXT NOT NULL CHECK (type IN ('tpm','filter','topup','change')),
+    tpm REAL CHECK (tpm IS NULL OR (tpm >= 0 AND tpm <= 100)),
+    temperature REAL CHECK (temperature IS NULL OR (temperature >= -20 AND temperature <= 300)),
+    quality_ok INTEGER,                     -- tägliche Prüfung: 1 zulässig, 0 unzulässig
+    reason TEXT CHECK (reason IS NULL OR reason IN ('planned','early','quality')),
+    quantity_l REAL CHECK (quantity_l IS NULL OR quantity_l > 0),
+    media_id INTEGER REFERENCES media(id),
+    note TEXT,
+    source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual','import','test')),
+    measured_at TEXT,                       -- Zeitpunkt laut Gerät (Import)
+    device_serial TEXT,
+    created_by INTEGER NOT NULL REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  );
+  INSERT INTO oil_events_new (id, fryer_id, branch_id, type, tpm, media_id, note, created_by, created_at)
+    SELECT id, fryer_id, branch_id, type, tpm, media_id, note, created_by, created_at FROM oil_events;
+  DROP TABLE oil_events;
+  ALTER TABLE oil_events_new RENAME TO oil_events;
+  CREATE INDEX idx_oil_fryer ON oil_events(fryer_id, created_at);
+  CREATE UNIQUE INDEX idx_oil_import_dup ON oil_events(fryer_id, measured_at, type) WHERE measured_at IS NOT NULL;
+  ALTER TABLE fryers ADD COLUMN change_interval_days INTEGER CHECK (change_interval_days IS NULL OR change_interval_days BETWEEN 1 AND 60);
+  ALTER TABLE fryers ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE fryers ADD COLUMN blocked_reason TEXT;
+  ALTER TABLE fryers ADD COLUMN device_serial TEXT;
+
+  -- Aufgaben: Intervall (ab letzter Erledigung), Übertrag überfälliger Aufgaben, Fritteuse, Reinigungsmittel
+  ALTER TABLE task_templates ADD COLUMN interval_days INTEGER CHECK (interval_days IS NULL OR interval_days BETWEEN 1 AND 365);
+  ALTER TABLE task_templates ADD COLUMN carry_over INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE task_templates ADD COLUMN fryer_id INTEGER REFERENCES fryers(id);
+  ALTER TABLE task_templates ADD COLUMN cleaning_agent TEXT;
+  -- Persönliche Zuweisung und "in Arbeit"
+  ALTER TABLE task_occurrences ADD COLUMN assigned_to INTEGER REFERENCES users(id);
+  ALTER TABLE task_occurrences ADD COLUMN assignment_mode TEXT CHECK (assignment_mode IS NULL OR assignment_mode IN ('auto','manual'));
+  ALTER TABLE task_occurrences ADD COLUMN started_by INTEGER REFERENCES users(id);
+  ALTER TABLE task_occurrences ADD COLUMN started_at TEXT;
+  CREATE INDEX idx_occ_assigned ON task_occurrences(assigned_to, status);
+  -- Anwesenheit je Schicht (keine Zeiterfassung: nur "eingeteilt/abwesend" für die Aufgabenverteilung)
+  CREATE TABLE shift_presence (
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    work_date TEXT NOT NULL,
+    shift TEXT NOT NULL CHECK (shift IN ('open','run','close')),
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    status TEXT NOT NULL DEFAULT 'present' CHECK (status IN ('present','absent')),
+    source TEXT NOT NULL CHECK (source IN ('self','manager','plan')),
+    updated_by INTEGER NOT NULL REFERENCES users(id),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    PRIMARY KEY (branch_id, work_date, shift, user_id)
+  );
+  -- Reinigung "nach Benutzung" (ereignisbasiert, beliebig oft am Tag)
+  CREATE TABLE cleaning_logs (
+    id INTEGER PRIMARY KEY,
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    area TEXT NOT NULL,
+    media_id INTEGER REFERENCES media(id),
+    note TEXT,
+    created_by INTEGER NOT NULL REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  );
+  `,
 ];
 
 export function openDb(file = ':memory:') {

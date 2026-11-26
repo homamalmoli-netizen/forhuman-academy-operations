@@ -287,3 +287,21 @@ html, body { overflow-x: hidden; }
 .expired-batch { border-color: var(--red); background: #fff6f6; }
 .grid3 { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 6px; }
 @media print { .label-card { border: 2px solid #000; } }
+
+/* Reinigung, Mehr, Besetzung */
+.more-grid .big-btn { text-decoration: none; color: var(--ink); text-align: center; padding: 6px; }
+.clean-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.clean-row { background: #fff; border: 1.5px solid var(--line); border-radius: 14px; padding: 10px; display: grid; gap: 6px; }
+.clean-row.st-overdue, .clean-row.st-rework { border-color: var(--red); background: #fff6f6; }
+.clean-row.st-done { opacity: .7; }
+.clean-row.st-in_progress { border-color: var(--gold); }
+.clean-main { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.clean-main small { display: block; }
+.clean-main .ico.big { color: var(--red); }
+.clean-row .row { justify-content: flex-end; }
+a.small { text-decoration: none; }
+.event-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.event-grid button { min-height: 64px; display: grid; gap: 2px; font-size: .85rem; padding: 6px; }
+.event-grid small { color: var(--muted); font-weight: 400; }
+.personal-head { background: var(--black); color: #fff; border-radius: 12px; padding: 8px 12px; margin: 6px 0; }
+.change-form { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; }

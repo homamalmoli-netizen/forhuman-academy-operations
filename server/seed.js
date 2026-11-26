@@ -40,8 +40,8 @@ const TEMPLATES = [
     L('Reinigungsmittel laut Etikett benutzen.', 'Use cleaning product as on the label.', 'استخدم المنظّف حسب الملصق.', 'Temizlik ürününü etikete göre kullan.'), { sop: 'SOP-SURFACES' }],
   ['run', 'routine', 'refill', L('Nachfüllen', 'Refill', 'أعد التعبئة', 'Doldur'),
     L('Verpackung, Saucen, Servietten.', 'Packaging, sauces, napkins.', 'العبوات والصلصات والمناديل.', 'Ambalaj, soslar, peçeteler.'), { station: 'ausgabe' }],
-  ['run', 'equipment', 'oil', L('Öl messen (TPM)', 'Measure oil (TPM)', 'قِس الزيت (TPM)', 'Yağı ölç (TPM)'),
-    L('Im Ölmanager eintragen. Foto vom Messgerät.', 'Enter in Oil manager. Photo of the meter.', 'سجّل في إدارة الزيت. صوّر جهاز القياس.', 'Yağ yöneticisine gir. Ölçerin fotoğrafı.'), { course: 'C-FRYER-GGM', station: 'druckfritteuse' }],
+  ['run', 'equipment', 'oil', L('Tägliche Ölprüfung (alle Fritteusen)', 'Daily oil check (all fryers)', 'فحص الزيت اليومي (كل القلايات)', 'Günlük yağ kontrolü (tüm fritözler)'),
+    L('Jede Fritteuse im Ölmanager prüfen: TPM, Temperatur, zulässig? Foto.', 'Check every fryer in the oil manager: TPM, temperature, OK? Photo.', 'افحص كل قلاية في إدارة الزيت: TPM، الحرارة، مقبول؟ صورة.', 'Her fritözü yağ yöneticisinde kontrol et: TPM, sıcaklık, uygun mu? Fotoğraf.'), { course: 'C-FRYER-GGM', station: 'druckfritteuse', action: 'oil_check' }],
   // Schließung / Spätschicht
   ['close', 'cleaning', 'fryer', L('Pommes-Station reinigen', 'Clean the fries station', 'نظّف محطة البطاطا', 'Patates istasyonunu temizle'),
     L('Nach freigegebener Anleitung. Foto am Ende.', 'As per approved instructions. Photo at the end.', 'حسب التعليمات المعتمدة. صورة في النهاية.', 'Onaylı talimata göre. Sonunda fotoğraf.'), { photo: 1, station: 'pommes' }],
@@ -71,11 +71,45 @@ const TEMPLATES = [
     L('Nach MHD sortieren. Abgelaufenes melden.', 'Sort by best-before date. Report expired items.', 'رتّب حسب تاريخ الصلاحية. أبلغ عن المنتهي.', "TETT'ye göre sırala. Süresi geçeni bildir."), { freq: 'weekly', weekdays: '3' }],
   // Wöchentlich / monatlich
   ['close', 'cleaning', 'snow', L('Kühlschrank innen reinigen (wöchentlich)', 'Clean fridge inside (weekly)', 'نظّف الثلاجة من الداخل (أسبوعيًا)', 'Buzdolabı içini temizle (haftalık)'),
-    L('Ware umlagern, kühl halten.', 'Move stock, keep it cold.', 'انقل البضاعة وأبقها باردة.', 'Malları taşı, soğuk tut.'), { photo: 1, freq: 'weekly', weekdays: '1' }],
+    L('Ware umlagern, kühl halten.', 'Move stock, keep it cold.', 'انقل البضاعة وأبقها باردة.', 'Malları taşı, soğuk tut.'), { photo: 1, freq: 'weekly', weekdays: '1', carry: 1 }],
   ['open', 'pest', 'bug', L('Schädlingskontrolle (wöchentlich)', 'Pest check (weekly)', 'فحص الحشرات (أسبوعيًا)', 'Haşere kontrolü (haftalık)'),
-    L('Kontrollpunkte ansehen. Nichts selbst sprühen.', 'Look at check points. Do not spray yourself.', 'افحص نقاط المراقبة. لا ترشّ بنفسك.', 'Kontrol noktalarına bak. Kendin ilaçlama.'), { freq: 'weekly', weekdays: '3', role: 'shift_lead', action: 'pest_check' }],
+    L('Kontrollpunkte ansehen. Nichts selbst sprühen.', 'Look at check points. Do not spray yourself.', 'افحص نقاط المراقبة. لا ترشّ بنفسك.', 'Kontrol noktalarına bak. Kendin ilaçlama.'), { freq: 'weekly', weekdays: '3', role: 'shift_lead', action: 'pest_check', carry: 1 }],
   ['open', 'maintenance', 'build', L('Geräte-Sichtprüfung (monatlich)', 'Equipment visual check (monthly)', 'فحص بصري للأجهزة (شهريًا)', 'Cihaz gözle kontrol (aylık)'),
-    L('Kabel, Dichtungen, Typenschild. Schäden melden.', 'Cables, seals, rating plate. Report damage.', 'الأسلاك والحشوات ولوحة البيانات. أبلغ عن الأضرار.', 'Kablolar, contalar, etiket. Hasarı bildir.'), { photo: 1, freq: 'monthly', monthDay: 1, role: 'shift_lead' }],
+    L('Kabel, Dichtungen, Typenschild. Schäden melden.', 'Cables, seals, rating plate. Report damage.', 'الأسلاك والحشوات ولوحة البيانات. أبلغ عن الأضرار.', 'Kablolar, contalar, etiket. Hasarı bildir.'), { photo: 1, freq: 'monthly', monthDay: 1, role: 'shift_lead', carry: 1 }],
+
+  // Reinigungsplan (Betreiber-Auftrag): täglich / laufend / Schichtende; wöchentliche Grundreinigung (übertragbar, bis erledigt)
+  ['run', 'cleaning', 'hands', L('Türgriffe reinigen', 'Clean door handles', 'نظّف مقابض الأبواب', 'Kapı kollarını temizle'),
+    L('Griffe innen und außen, Toilettentür.', 'Handles inside and outside, toilet door.', 'المقابض من الداخل والخارج، باب الحمام.', 'Kollar içte ve dışta, tuvalet kapısı.')],
+  ['run', 'cleaning', 'clean', L('Toiletten prüfen und reinigen', 'Check and clean toilets', 'افحص ونظّف الحمامات', 'Tuvaletleri kontrol et ve temizle'),
+    L('Seife, Papier, Sauberkeit. Foto.', 'Soap, paper, cleanliness. Photo.', 'صابون، ورق، نظافة. صورة.', 'Sabun, kâğıt, temizlik. Fotoğraf.'), { photo: 1 }],
+  ['run', 'cleaning', 'store', L('Tische und Stühle abwischen', 'Wipe tables and chairs', 'امسح الطاولات والكراسي', 'Masa ve sandalyeleri sil'),
+    L('Nach Gästen, laut Reinigungsplan.', 'After guests, as per cleaning plan.', 'بعد الزبائن، حسب خطة التنظيف.', 'Misafirlerden sonra, temizlik planına göre.')],
+  ['close', 'cleaning', 'prep', L('Marinierstation reinigen', 'Clean the marinating station', 'نظّف محطة التتبيل', 'Marine istasyonunu temizle'),
+    L('Reste weg, reinigen, desinfizieren laut Plan. Foto.', 'Remove leftovers, clean, disinfect as per plan. Photo.', 'أزل البقايا، نظّف، عقّم حسب الخطة. صورة.', 'Artıkları at, temizle, plana göre dezenfekte et. Fotoğraf.'), { photo: 1, sop: 'SOP-SURFACES' }],
+  ['close', 'cleaning', 'prep', L('Messer und Schneidebretter reinigen', 'Clean knives and cutting boards', 'نظّف السكاكين وألواح التقطيع', 'Bıçak ve kesme tahtalarını temizle'),
+    L('Spülen, desinfizieren, trocken lagern.', 'Wash, disinfect, store dry.', 'اغسل، عقّم، خزّن جافًا.', 'Yıka, dezenfekte et, kuru sakla.'), { sop: 'SOP-SURFACES' }],
+  ['close', 'cleaning', 'fryer', L('Fritteusen außen reinigen', 'Clean fryers outside', 'نظّف القلايات من الخارج', 'Fritözleri dıştan temizle'),
+    L('Nur außen, Gerät kalt bzw. laut Herstelleranleitung.', 'Outside only, device cold or as per manufacturer.', 'من الخارج فقط، الجهاز بارد أو حسب الشركة المصنّعة.', 'Sadece dış, cihaz soğuk veya üreticiye göre.')],
+  ['close', 'cleaning', 'snow', L('Wärmevitrine reinigen', 'Clean the warming cabinet', 'نظّف خزانة التسخين', 'Isıtma vitrinini temizle'),
+    L('Nach Herstelleranleitung. Foto.', 'As per manufacturer manual. Photo.', 'حسب دليل الشركة المصنّعة. صورة.', 'Üretici kılavuzuna göre. Fotoğraf.'), { photo: 1 }],
+  ['close', 'cleaning', 'box', L('Burger- und Verpackungsstation reinigen', 'Clean burger and packing station', 'نظّف محطة البرغر والتغليف', 'Burger ve paket istasyonunu temizle'),
+    L('Flächen, Behälter, Spender.', 'Surfaces, containers, dispensers.', 'الأسطح والأوعية والموزعات.', 'Yüzeyler, kaplar, dispenserler.'), { station: 'burger' }],
+  ['close', 'cleaning', 'run', L('Spülbecken reinigen', 'Clean the sinks', 'نظّف أحواض الغسيل', 'Lavaboları temizle'),
+    L('Becken, Armatur, Abfluss.', 'Basin, tap, drain.', 'الحوض والصنبور والمصرف.', 'Lavabo, musluk, gider.')],
+  ['close', 'cleaning', 'clean', L('Boden reinigen', 'Clean the floor', 'نظّف الأرضية', 'Zemini temizle'),
+    L('Küche, Lager, Gastraum. Warnschild aufstellen.', 'Kitchen, storage, dining room. Put up warning sign.', 'المطبخ والمخزن والصالة. ضع لافتة تحذير.', 'Mutfak, depo, salon. Uyarı levhası koy.'), { photo: 1 }],
+  ['close', 'cleaning', 'store', L('Verkaufstheke reinigen', 'Clean the sales counter', 'نظّف كاونتر البيع', 'Satış tezgâhını temizle'),
+    L('Theke, Bildschirme, Ablagen.', 'Counter, screens, shelves.', 'الكاونتر والشاشات والرفوف.', 'Tezgâh, ekranlar, raflar.'), { station: 'theke' }],
+  ['close', 'cleaning', 'warn', L('Abzugshaube und Fettfilter reinigen (wöchentlich)', 'Clean extractor hood and grease filters (weekly)', 'نظّف شفاط المطبخ وفلاتر الدهون (أسبوعيًا)', 'Davlumbaz ve yağ filtrelerini temizle (haftalık)'),
+    L('Nach freigegebenem Reinigungsplan, bei Bedarf häufiger. Foto.', 'As per approved cleaning plan, more often if needed. Photo.', 'حسب خطة التنظيف المعتمدة، أكثر عند الحاجة. صورة.', 'Onaylı temizlik planına göre, gerekirse daha sık. Fotoğraf.'), { photo: 1, freq: 'weekly', weekdays: '2', role: 'shift_lead', carry: 1 }],
+  ['close', 'cleaning', 'clean', L('Wände und Fliesen reinigen (wöchentlich)', 'Clean walls and tiles (weekly)', 'نظّف الجدران والبلاط (أسبوعيًا)', 'Duvar ve fayansları temizle (haftalık)'),
+    L('Spritzbereiche zuerst. Foto.', 'Splash areas first. Photo.', 'مناطق الرذاذ أولًا. صورة.', 'Önce sıçrama alanları. Fotoğraf.'), { photo: 1, freq: 'weekly', weekdays: '4', carry: 1 }],
+  ['close', 'cleaning', 'eye', L('Unter und hinter Geräten reinigen (wöchentlich)', 'Clean under and behind equipment (weekly)', 'نظّف تحت وخلف الأجهزة (أسبوعيًا)', 'Cihazların altını ve arkasını temizle (haftalık)'),
+    L('Nur wenn sicher möglich. Kabel nicht beschädigen. Foto.', 'Only if safe. Do not damage cables. Photo.', 'فقط إذا كان آمنًا. لا تتلف الأسلاك. صورة.', 'Sadece güvenliyse. Kablolara zarar verme. Fotoğraf.'), { photo: 1, freq: 'weekly', weekdays: '5', carry: 1 }],
+  ['close', 'cleaning', 'box', L('Regale und Lager reinigen (wöchentlich)', 'Clean shelves and storage (weekly)', 'نظّف الرفوف والمخزن (أسبوعيًا)', 'Rafları ve depoyu temizle (haftalık)'),
+    L('Ware sicher umlagern, Kühlware kühl halten.', 'Move goods safely, keep chilled goods cold.', 'انقل البضاعة بأمان وأبقِ المبرد باردًا.', 'Malları güvenle taşı, soğuk malı soğuk tut.'), { photo: 1, freq: 'weekly', weekdays: '6', carry: 1 }],
+  ['close', 'cleaning', 'fryer', L('Fritteusen-Grundreinigung (wöchentlich)', 'Fryer deep clean (weekly)', 'تنظيف عميق للقلايات (أسبوعيًا)', 'Fritöz derin temizlik (haftalık)'),
+    L('Nur nach freigegebener Herstelleranleitung und mit Freigabe.', 'Only as per approved manufacturer manual and with sign-off.', 'فقط حسب دليل الشركة المعتمد ومع الإذن.', 'Sadece onaylı üretici kılavuzuna göre ve onayla.'), { freq: 'weekly', weekdays: '7', course: 'C-FRYER-GGM', sop: 'SOP-FRYER-GGM', carry: 1 }],
 ];
 
 const SOPS = [
@@ -358,7 +392,7 @@ export function seedTemplates(db, branchId) {
   const has = db.prepare('SELECT COUNT(*) AS n FROM task_templates WHERE branch_id = ?').get(branchId).n;
   if (has) return;
   const ins = db.prepare(`INSERT INTO task_templates (branch_id, shift, position, category, frequency, weekdays, month_day, icon, title, hint,
-    requires_photo, measure_unit, sop_id, required_course_id, station_id, role, link, action) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+    requires_photo, measure_unit, sop_id, required_course_id, station_id, role, link, action, carry_over) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
   const pos = { open: 0, run: 0, close: 0 };
   tx(db, () => {
     for (const [shift, cat, icon, title, hint, o = {}] of TEMPLATES) {
@@ -367,7 +401,7 @@ export function seedTemplates(db, branchId) {
         JSON.stringify(title), JSON.stringify(hint), o.photo ? 1 : 0, o.unit ?? null,
         o.sop ? idBy(db, 'sops', o.sop) : null, o.course ? idBy(db, 'courses', o.course) : null,
         o.station ? db.prepare('SELECT id FROM stations WHERE branch_id = ? AND code = ?').get(branchId, o.station)?.id ?? null : null,
-        o.role || 'all', o.link || null, o.link || o.action || null);
+        o.role || 'all', o.link || null, o.link || o.action || null, o.carry ? 1 : 0);
     }
   });
 }
@@ -427,6 +461,7 @@ export function seedDemo(db) {
     insFryer.run(halle, 'Hähnchen 1', 'GGM Gastro', 'Hochdruckfritteuse (Modell zu prüfen)', 0, 'DEMO Frittieröl (fiktiv)', fryerCourse);
     insFryer.run(halle, 'Pommes 1', 'Frymaster', 'RE122-BLSCS', 0, 'DEMO Frittieröl (fiktiv)', fryerCourse);
     insFryer.run(leuna, 'Hähnchen 1', 'GGM Gastro', 'Hochdruckfritteuse (Modell zu prüfen)', 0, 'DEMO Frittieröl (fiktiv)', fryerCourse);
+    db.prepare("UPDATE fryers SET change_interval_days = 7, device_serial = 'DEMO-SN-' || id").run();
 
     // Demo-Mitarbeiter A hat Hygiene bestanden; Fritteuse noch nicht -> Fritteusen-Aufgaben gesperrt (Qualifikationsprüfung sichtbar).
     const hyg = idBy(db, 'courses', 'C-HYGIENE');

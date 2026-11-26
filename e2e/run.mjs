@@ -50,6 +50,7 @@ async function newPage() {
   page.on('pageerror', (e) => page.errors.push(String(e)));
   return page;
 }
+const nav = (page, hash) => page.evaluate((h) => { location.hash = h; }, hash);
 const shot = (page, name) => page.screenshot({ path: join(shots, name + '.png'), fullPage: false });
 const shotFull = (page, name) => page.screenshot({ path: join(shots, name + '.png'), fullPage: true });
 
@@ -119,6 +120,7 @@ try {
     await p.waitForFunction(() => document.documentElement.dir === 'ltr');
     await shot(p, '08-tuerkisch');
     await p.selectOption('select[data-change=lang]', 'de');
+    await p.waitForFunction(() => document.documentElement.lang === 'de' && !/[\u0600-\u06FF]/.test(document.querySelector('main')?.textContent || ''), null, { timeout: 15000 });
   });
 
   await step('Fritteuse gesperrt ohne Qualifikation', async () => {
@@ -149,7 +151,7 @@ try {
   });
 
   await step('Wareneingang: bekannter GTIN mit Charge/MHD, Annahme mit Foto bucht Bestand', async () => {
-    await p.click('a.tab[href="#/goods"]');
+    await nav(p, '#/goods');
     await p.fill('input[name=code]', '(01)02000000000015(10)CH-77(17)270115');
     await p.click('form[data-submit=scan] button.primary');
     await p.locator('.match', { hasText: 'Hähnchenschenkel' }).waitFor();
@@ -176,14 +178,15 @@ try {
   });
 
   await step('Ölmanager: kein Grenzwert → keine Freigabe (nur Hinweis)', async () => {
-    await p.click('a.tab[href="#/oil"]');
+    await nav(p, '#/oil');
     await p.locator('.fryer').first().waitFor();
     await shot(p, '15-oelmanager');
     // Ohne praktische Freigabe gesperrt
-    await p.fill('.fryer >> nth=0 >> input[name=tpm]', '15');
-    await p.setInputFiles('.fryer >> nth=0 >> input[data-change=photo]', photoPath);
-    await p.locator('.fryer >> nth=0 >> .photo-field.ready').waitFor();
-    await p.click('.fryer >> nth=0 >> button[value=tpm]');
+    const f0 = p.locator('form[data-submit=oil]').first();
+    await f0.locator('input[name=tpm]').fill('15');
+    await f0.locator('input[data-change=photo]').setInputFiles(photoPath);
+    await f0.locator('.photo-field.ready').waitFor();
+    await f0.locator('button[value=tpm]').click();
     await p.locator('.flash.error', { hasText: 'Freigabe' }).waitFor();
   });
   assert.deepEqual(p.errors, [], 'JavaScript-Fehler auf der Mitarbeiterseite: ' + p.errors.join('; '));
@@ -389,7 +392,7 @@ try {
   });
 
   await step('Tagesinventur Frühschicht: vollständig ausfüllen, Abgabe mit Zeit und Name', async () => {
-    await p.click('a.tab[href="#/goods"]');
+    await nav(p, '#/goods');
     await p.click('a[href="#/daily/early"]');
     await p.locator('form[data-submit=daily]').waitFor();
     await p.click('button[value=submit]');
@@ -405,7 +408,7 @@ try {
   });
 
   await step('Schädlingskontrolle: 10 Bereiche, Befund mit Foto wird an Leitung gemeldet', async () => {
-    await p.click('a.tab[href="#/goods"]');
+    await nav(p, '#/goods');
     await p.click('a[href="#/pest"]');
     await p.locator('form[data-submit=pest]').waitFor();
     const areas = p.locator('.pest-area');
@@ -441,7 +444,7 @@ try {
   });
 
   await step('Marinieren: feste Rezeptur, Mengen berechnet, Charge mit Etikett', async () => {
-    await p.click('a.tab[href="#/goods"]');
+    await nav(p, '#/goods');
     await p.click('a[href="#/marinade"]');
     await p.locator('form[data-submit=batch]').waitFor();
     await p.fill('input[name=meat_kg]', '4');
@@ -452,6 +455,58 @@ try {
     await p.click('form[data-submit=batch] button.primary');
     await p.locator('.ok-card .label-card', { hasText: 'MAR-HAL-' }).waitFor();
     await shot(p, '41-marinade-etikett');
+  });
+
+  await step('Reinigungsplan: eigener Menüpunkt mit Status, Verantwortlichem, „nach Benutzung“', async () => {
+    await p.click('a.tab[href="#/cleaning"]');
+    await p.locator('.clean-list').first().waitFor();
+    await p.locator('.event-grid button').first().click();
+    await p.locator('.flash.ok').waitFor();
+    const startBtn = p.locator('.clean-row', { hasText: 'Küche reinigen' }).locator('button[data-action=task-start]');
+    await startBtn.click();
+    await p.locator('.clean-row.st-in_progress').first().waitFor();
+    await shot(p, '43-reinigungsplan');
+  });
+
+  await step('Persönliche Aufgaben: Schichtführer teilt ein, Mitarbeiter sieht nur seine Aufgaben', async () => {
+    await sl.click('a.tab[href="#/manage"]');
+    await sl.click('a[href="#/manage/staffing"]');
+    await sl.locator('a.seg[href="#/manage/staffing/close"]').click();
+    const row = sl.locator('tr', { hasText: 'Demo Mitarbeiter A' });
+    await row.locator('button[data-status=present]').click();
+    await sl.locator('.flash.ok', { hasText: 'neu verteilt' }).waitFor();
+    await sl.locator('tr', { hasText: 'Demo Schichtführer' }).locator('button[data-status=present]').click();
+    await sl.locator('.flash.ok', { hasText: 'neu verteilt' }).waitFor();
+    await shotFull(sl, '44-besetzung-verteilung');
+    await p.click('a.tab[href="#/shift"]');
+    await p.click('button[data-shift=close]');
+    await p.locator('.personal-head', { hasText: 'Meine Aufgaben' }).waitFor();
+    await shot(p, '45-meine-aufgaben');
+  });
+
+  await step('Öl: tägliche Prüfung „nicht zulässig“ sperrt Fritteuse, Wechsel hebt Sperre auf', async () => {
+    await nav(p, '#/oil');
+    const f0 = p.locator('form[data-submit=oil]').first();
+    await f0.locator('input[name=tpm]').fill('11');
+    await f0.locator('input[name=temperature]').fill('170');
+    await f0.locator('label.no').click();
+    await f0.locator('input[data-change=photo]').setInputFiles(photoPath);
+    await f0.locator('.photo-field.ready').waitFor();
+    await f0.locator('button[value=tpm]').click();
+    await p.locator('.banner.danger', { hasText: 'GESPERRT' }).waitFor();
+    await shot(p, '46-fritteuse-gesperrt');
+    const ch = p.locator('form[data-submit=oil-change]').first();
+    await ch.locator('input[name=quantity_l]').fill('25');
+    await ch.locator('button').last().click();
+    await p.locator('.flash.ok').waitFor();
+    assert.equal(await p.locator('.banner.danger', { hasText: 'GESPERRT' }).count(), 0);
+    await p.locator('.fryer', { hasText: 'Nächster Ölwechsel' }).first().waitFor();
+  });
+
+  await step('Wochenbericht je Filiale', async () => {
+    await sl.click('a[href="#/manage/week"]');
+    await sl.locator('h1', { hasText: 'Wochenbericht' }).waitFor();
+    await shotFull(sl, '47-wochenbericht');
   });
   assert.deepEqual(p.errors.concat(sl.errors, tr2.errors), [], 'JavaScript-Fehler: ' + p.errors.concat(sl.errors, tr2.errors).join('; '));
 

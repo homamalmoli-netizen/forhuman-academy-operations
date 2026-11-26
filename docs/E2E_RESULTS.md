@@ -1,6 +1,6 @@
 # End-to-End-Ergebnis
 
-Ausgeführt: 2026-11-25T21:35:32.979Z · Chrome · Handy-Ansicht 390×844
+Ausgeführt: 2026-11-26T09:02:21.016Z · Chrome · Handy-Ansicht 390×844
 
 - ✅ Startseite: Sprache wählen und Demo ohne Login
 - ✅ Öffnung: eine Aufgabe pro Bildschirm, Erledigt
@@ -35,8 +35,12 @@ Ausgeführt: 2026-11-25T21:35:32.979Z · Chrome · Handy-Ansicht 390×844
 - ✅ Handbuch: Trainer trägt Einweisung ein, Mitarbeiter bestätigt
 - ✅ Leitung: Tagesinventur-Übersicht – wer hat rechtzeitig abgegeben
 - ✅ Marinieren: feste Rezeptur, Mengen berechnet, Charge mit Etikett
+- ✅ Reinigungsplan: eigener Menüpunkt mit Status, Verantwortlichem, „nach Benutzung“
+- ✅ Persönliche Aufgaben: Schichtführer teilt ein, Mitarbeiter sieht nur seine Aufgaben
+- ✅ Öl: tägliche Prüfung „nicht zulässig“ sperrt Fritteuse, Wechsel hebt Sperre auf
+- ✅ Wochenbericht je Filiale
 - ✅ Admin: Anleitung (SOP) mit Prüfstatus und Versionen
 - ✅ Produktion: nur Anmeldung, keine Demo-Buttons, keine Standardkonten
 - ✅ Offline: keine falsche Erfolgsmeldung
 
-**36 von 36 bestanden.** Screenshots: `docs/screenshots/`
+**40 von 40 bestanden.** Screenshots: `docs/screenshots/`

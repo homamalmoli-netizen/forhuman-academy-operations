@@ -105,8 +105,13 @@ describe('Stationen, Stationscheck, Stufen, Positionsplan, Timer', () => {
     const { createSession } = await import('../server/auth.js');
     c.cookie = 'fh_session=' + createSession(srv.db, ids['demo.mitarbeiter.halle2']);
     const dc = (await c.get(`/api/shift/next?branch=${HALLE}&shift=open`)).data;
-    assert.equal(dc.next.station_id, station(HALLE, 'pommes'));
-    assert.equal((await c.post(`/api/tasks/${dc.next.id}/complete`)).status, 200);
+    assert.equal(dc.personal, true, 'mit Positionsplan: persönliche Aufgaben');
+    assert.ok(dc.next);
+    assert.equal((await c.post(`/api/tasks/${dc.next.id}/complete`, dc.next.requires_photo ? { media_id: await c.photo(HALLE) } : {})).status, 200);
+    // Stationsaufgabe der Pommes-Station ging an eine Person, die laut Plan dort ist
+    const pommesTask = srv.db.prepare(`SELECT o.assigned_to FROM task_occurrences o JOIN task_templates t ON t.id = o.template_id
+      WHERE t.station_id = ? AND o.shift = 'open' AND o.work_date = ?`).get(station(HALLE, 'pommes'), berlinDate());
+    assert.ok([ids['demo.schichtfuehrer.halle'], ids['demo.mitarbeiter.halle2']].includes(pommesTask.assigned_to));
   });
 
   test('Haltezeit-Timer: Wert nur mit Quelle, Start, abgelaufen → nur Entsorgen, Übersicht zählt', async () => {
