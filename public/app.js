@@ -235,7 +235,8 @@ async function viewControl(id) {
       ${r.review_note ? `<div class="banner">${icon('warn')} ${esc(r.review_note)}</div>` : ''}
       <p class="note">${esc(tr('zero_ok'))}</p>
       <ul class="plain ctl-list">${r.items.map(row).join('')}</ul>
-      ${r.marinated ? `<label>${esc(tr('temperature_c'))}<input name="temperature" type="number" inputmode="decimal" step="0.1" required value="${r.temperature ?? ''}" ${done ? 'disabled' : ''}></label>
+      ${r.marinated ? `<label>${esc(tr('temperature_c'))} · max. ${r.temp_max} °C<input name="temperature" type="number" inputmode="decimal" step="0.1" required value="${r.temperature ?? ''}" ${done ? 'disabled' : ''}></label>
+        ${r.temp_alarm ? `<div class="banner bad-text">${icon('warn')} ${esc(tr('temp_too_high'))}: ${r.temperature} °C</div>` : ''}
         ${r.use_within_hours ? '' : `<p class="note">${esc(tr('use_by_open'))}</p>`}` : ''}
       ${done ? '' : `${r.photo_required ? photoField('evidence', tr('take_photo')) : photoField('evidence', tr('take_photo') + ' (optional)')}
       <button class="primary block">${icon('check')} ${esc(tr('send'))}</button>`}
@@ -867,7 +868,7 @@ async function mControls() {
   const st = { open: ['offen', 'warn'], overdue: ['überfällig', 'change'], done: ['erledigt', 'ok'], late_done: ['verspätet', 'warn'], rework: ['Nacharbeit', 'change'] };
   const wd = ['', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
   const rhythm = (l) => l.schedule === 'daily' ? 'täglich' : l.schedule === 'weekly' ? `wöchentlich (${wd[l.weekday]})` : `alle ${l.interval_days} Tage ab ${l.start_date}`;
-  const runRow = (r) => `<tr><td>${esc(r.list)}</td><td>${esc(r.due_time)}</td><td><span class="badge ${st[r.state][1]}">${st[r.state][0]}</span>${r.reviewed ? ' ✓' : ''}</td>
+  const runRow = (r) => `<tr><td>${esc(r.list)}</td><td>${esc(r.due_time)}</td><td><span class="badge ${st[r.state][1]}">${st[r.state][0]}</span>${r.reviewed ? ' ✓' : ''}${r.temp_alarm ? ` <span class="badge change">${r.temperature} °C zu warm</span>` : ''}</td>
     <td>${['done', 'late_done'].includes(r.state) ? esc(r.completed_name || '') : `<select data-change="ctl-assign" data-id="${r.id}" aria-label="Verantwortlich"><option value="">${r.assigned_name ? esc(r.assigned_name) : '– nicht zugewiesen –'}</option>${d.staff.map((p) => `<option value="${p.id}">${esc(p.display_name)}</option>`).join('')}</select>`}</td>
     <td>${['done', 'late_done'].includes(r.state) && !r.reviewed ? `<form data-submit="ctl-review" data-id="${r.id}" class="inline"><input name="note" placeholder="Notiz" aria-label="Notiz"><button class="small primary" value="ok">ok</button><button class="small" value="rework">Nacharbeit</button></form>` : ''} <a href="#/control/${r.id}">ansehen</a></td></tr>`;
   return `<h1>${icon('box')} Kontrolllisten</h1>
@@ -875,6 +876,10 @@ async function mControls() {
     <h2>Heute (${esc(d.date)})</h2><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Liste</th><th>Fällig</th><th>Status</th><th>Verantwortlich</th><th></th></tr></thead><tbody>${d.runs.map(runRow).join('') || '<tr><td colspan="5">Heute keine Kontrolle fällig.</td></tr>'}</tbody></table></div>
     <h2>Unter Mindestbestand (letzte Kontrolle)</h2><ul class="plain">${d.below.map((b) => `<li>${icon('warn')} <b>${esc(b.name)}</b>: ${b.qty} / min. ${b.min_qty} ${esc(b.unit)} <small>(${esc(b.list)}, ${fmtTime(b.completed_at)})</small></li>`).join('') || '<li>Nichts unter Mindestbestand.</li>'}</ul>
     ${d.missing_min ? `<p class="banner">${icon('warn')} ${d.missing_min} Artikel ohne Mindestwert – unten eintragen (leer = offen, wird nicht erfunden).</p>` : ''}
+    <h2>Temperatur-Alarm mariniertes Fleisch</h2>
+    <form data-submit="ctl-temp" class="form card inline"><label>Höchstwert °C<input name="temp_max" type="number" step="0.1" min="-5" max="10" value="${d.temp_max}"></label>
+      <label>Quelle<input name="temp_source" value="${esc(d.temp_source)}" required></label><button class="primary">Speichern</button></form>
+    <p class="note">Liegt die eingetragene Kühltemperatur darüber, geht sofort eine Meldung an die Filialleitung.</p>
     <h2>Verbrauchsfrist mariniertes Fleisch</h2>
     <form data-submit="ctl-settings" class="form card inline"><label>Stunden (aus freigegebenem HACCP-Plan, leer = offen)<input name="use_within_hours" type="number" min="1" max="168" value="${d.use_within_hours ?? ''}"></label>
       <label>Quelle<input name="source" placeholder="z. B. HACCP-Plan, Version/Datum"></label><button class="primary">Speichern</button></form>
@@ -1430,7 +1435,10 @@ document.addEventListener('submit', async (ev) => {
         const lines = r.items.map((i) => ({ item_id: i.id, qty: fd['qty_' + i.id], marinated_at: fd['mat_' + i.id] || '' }));
         const res = await post(`/api/controls/runs/${form.dataset.id}`, { lines, temperature: fd.temperature, media_id: S.photo?.purpose === 'evidence' ? S.photo.id : undefined });
         S.photo = null;
-        S.flash = { type: res.below?.length ? 'warn' : 'ok', text: res.below?.length ? `${tr('saved')} · ${tr('below_min')}: ${res.below.join(', ')}` : tr('saved') };
+        const parts = [tr('saved')];
+        if (res.temp_alarm) parts.push(`${tr('temp_too_high')} (max. ${res.temp_max} °C)`);
+        if (res.below?.length) parts.push(`${tr('below_min')}: ${res.below.join(', ')}`);
+        S.flash = { type: res.temp_alarm ? 'error' : res.below?.length ? 'warn' : 'ok', text: parts.join(' · ') };
         location.hash = '#/controls'; return;
       }
       case 'ctl-list': {
@@ -1440,6 +1448,7 @@ document.addEventListener('submit', async (ev) => {
       case 'ctl-item': await api('PUT', `/api/controls/items/${form.dataset.id}`, { unit: fd.unit, min_qty: fd.min_qty }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'ctl-item-new': await post(`/api/controls/lists/${form.dataset.id}/items`, { name: fd.name, unit: fd.unit, min_qty: fd.min_qty }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'ctl-review': await post(`/api/controls/runs/${form.dataset.id}/review`, { ok: submitter?.value !== 'rework', note: fd.note }); S.flash = { type: 'ok', text: tr('saved') }; break;
+      case 'ctl-temp': await api('PUT', '/api/controls/settings', { branch: S.branch, temp_max: fd.temp_max, temp_source: fd.temp_source }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'ctl-settings': await api('PUT', '/api/controls/settings', { branch: S.branch, use_within_hours: fd.use_within_hours, source: fd.source }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'train-exam': {
         const n = form.querySelectorAll('fieldset').length;

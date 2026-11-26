@@ -34,6 +34,10 @@ export const CONTROL_LISTS = [
     ['Unterschenkel mild', 'kg', null], ['Unterschenkel pikant', 'kg', null]] },
 ];
 
+// Höchsttemperatur für Geflügelfleisch und Geflügelfleischzubereitungen (z. B. mariniertes Geflügel): +4 °C laut DIN 10508.
+// Je Filiale änderbar, aber nur mit Quelle.
+export const DEFAULT_TEMP_MAX = 4;
+export const DEFAULT_TEMP_SOURCE = 'DIN 10508 – Höchsttemperatur Geflügelfleisch/-zubereitungen +4 °C';
 export const DEFAULT_ESCALATION = [{ min: -10, to: 'staff' }, { min: 0, to: 'staff' }, { min: 5, to: 'staff' }, { min: 10, to: 'manager' }];
 
 // --- Zeit (Europe/Berlin, inkl. Sommerzeit) -------------------------------------------
@@ -162,7 +166,7 @@ export function registerControls({ route, db, needUser, needBranch, HttpError, b
   const items = (listId) => db.prepare('SELECT * FROM control_items WHERE list_id = ? AND active = 1 ORDER BY position, id').all(listId);
   const summary = (r) => ({ id: r.id, list: r.name, code: r.code, due_date: r.due_date, due_time: r.due_time, due_at: r.due_at, state: runState(r),
     assigned_to: r.assigned_to, assigned_name: r.assigned_name, completed_name: r.completed_name, completed_at: r.completed_at,
-    reviewed: !!r.reviewed_at, marinated: !!r.marinated });
+    reviewed: !!r.reviewed_at, marinated: !!r.marinated, temp_alarm: !!r.temp_alarm, temperature: r.temperature });
 
   route('GET', '/api/controls/mine', (ctx) => {
     const u = needUser(ctx);
@@ -192,7 +196,7 @@ export function registerControls({ route, db, needUser, needBranch, HttpError, b
     const lines = new Map(db.prepare('SELECT * FROM control_run_lines WHERE run_id = ?').all(r.id).map((l) => [l.item_id, l]));
     const hours = Number(setting(db, r.branch_id, 'marinade_use_within_hours', '')) || null;
     return { ...summary(r), photo_required: !!r.photo_required, temperature: r.temperature, note: r.note, media_id: r.media_id, review_note: r.review_note,
-      use_within_hours: hours,
+      use_within_hours: hours, temp_max: Number(setting(db, r.branch_id, 'marinated_temp_max', DEFAULT_TEMP_MAX)),
       items: items(r.list_id).map((i) => ({ id: i.id, name: i.name, unit: i.unit, min_qty: i.min_qty, qty: lines.get(i.id)?.qty ?? null,
         reorder: lines.get(i.id)?.reorder ?? null, marinated_at: lines.get(i.id)?.marinated_at ?? null, use_by: lines.get(i.id)?.use_by ?? null })) };
   });
@@ -233,6 +237,8 @@ export function registerControls({ route, db, needUser, needBranch, HttpError, b
         }
       }
     }
+    const tempMax = Number(setting(db, branchId, 'marinated_temp_max', DEFAULT_TEMP_MAX));
+    const tempAlarm = r.marinated && temperature > tempMax;
     const media = mediaInBranch(ctx.body.media_id, branchId);
     if (r.photo_required && !media) throw bad('photo_required', 'Foto ist Pflicht');
     const now = new Date();
@@ -246,14 +252,15 @@ export function registerControls({ route, db, needUser, needBranch, HttpError, b
         if (reorder) below.push(`${p.i.name} (${p.qty}/${p.i.min_qty} ${p.i.unit})`);
         ins.run(r.id, p.i.id, p.qty, reorder, p.marinated_at, p.use_by ?? null);
       }
-      const upd = db.prepare(`UPDATE control_runs SET status = 'done', completed_by = ?, completed_at = ?, on_time = ?, temperature = ?, media_id = ?, note = ?,
+      const upd = db.prepare(`UPDATE control_runs SET status = 'done', completed_by = ?, completed_at = ?, on_time = ?, temperature = ?, temp_alarm = ?, media_id = ?, note = ?,
         assigned_to = COALESCE(assigned_to, ?) WHERE id = ? AND status IN ('open','rework')`)
-        .run(u.id, now.toISOString(), onTime ? 1 : 0, temperature, media ?? null, String(ctx.body.note || '').slice(0, 300) || null, u.id, r.id);
+        .run(u.id, now.toISOString(), onTime ? 1 : 0, temperature, tempAlarm ? 1 : 0, media ?? null, String(ctx.body.note || '').slice(0, 300) || null, u.id, r.id);
       if (!upd.changes) throw new HttpError(409, 'not_open', 'Diese Kontrolle ist bereits abgeschlossen');
       if (below.length) notify(db, branchId, 'control', `Unter Mindestbestand (${r.name}): ${below.join(', ')}`, `ctl:${r.id}:below`);
+      if (tempAlarm) notify(db, branchId, 'temperature', `TEMPERATUR ZU HOCH: ${r.name} – ${temperature} °C (Höchstwert ${tempMax} °C), eingetragen von ${u.display_name}. Sofort prüfen und nach freigegebenem Verfahren handeln.`, `ctl:${r.id}:temp`);
       audit(db, { actor: u.id, branch: branchId, action: 'control_done', entity: 'control_run', id: r.id, payload: { on_time: onTime, below: below.length } });
     });
-    return { ok: true, on_time: onTime, below };
+    return { ok: true, on_time: onTime, below, temp_alarm: !!tempAlarm, temp_max: tempMax };
   });
 
   route('POST', '/api/controls/runs/:id/review', (ctx) => {
@@ -306,7 +313,8 @@ export function registerControls({ route, db, needUser, needBranch, HttpError, b
       WHERE m.branch_id = ? AND m.role IN ('employee','shift_lead') ORDER BY u.display_name`).all(branchId);
     return { date, runs: runs.map(summary), below, lists, staff, escalation: escalationRules(db, branchId),
       missing_min: lists.reduce((n, l) => n + l.items.filter((i) => i.active && i.min_qty == null).length, 0),
-      use_within_hours: Number(setting(db, branchId, 'marinade_use_within_hours', '')) || null };
+      use_within_hours: Number(setting(db, branchId, 'marinade_use_within_hours', '')) || null,
+      temp_max: Number(setting(db, branchId, 'marinated_temp_max', DEFAULT_TEMP_MAX)), temp_source: setting(db, branchId, 'marinated_temp_source', DEFAULT_TEMP_SOURCE) };
   });
 
   route('PUT', '/api/controls/lists/:id', (ctx) => {
@@ -374,6 +382,12 @@ export function registerControls({ route, db, needUser, needBranch, HttpError, b
       if (h !== '' && !String(ctx.body.source || '').trim()) throw bad('source', 'Quelle der Verbrauchsfrist angeben (z. B. HACCP-Plan)');
       put('marinade_use_within_hours', String(h));
       if (h !== '') put('marinade_use_within_source', String(ctx.body.source).trim().slice(0, 200));
+    }
+    if (ctx.body.temp_max !== undefined) {
+      const t = Number(ctx.body.temp_max);
+      if (!Number.isFinite(t) || t < -5 || t > 10) throw bad('temp_max', 'Höchsttemperatur −5 bis +10 °C');
+      if (!String(ctx.body.temp_source || '').trim()) throw bad('temp_source', 'Quelle der Höchsttemperatur angeben');
+      put('marinated_temp_max', String(t)); put('marinated_temp_source', String(ctx.body.temp_source).trim().slice(0, 200));
     }
     audit(db, { actor: u.id, branch: branchId, action: 'control_settings', entity: 'branch', id: branchId, payload: ctx.body });
     return { ok: true };

@@ -807,6 +807,10 @@ const MIGRATIONS = [
   UPDATE control_items SET name = 'Panda Panade (Mehl)' WHERE name = 'Panda Panade';
   UPDATE control_items SET unit = 'Packungen (500 g)' WHERE unit = 'offen' AND name IN ('Bacon','Sucuk');
   `,
+  // 13: Temperatur-Alarm bei der Kontrolle des marinierten Fleisches (Höchstwert +4 °C für Geflügelfleischzubereitungen, DIN 10508).
+  `
+  ALTER TABLE control_runs ADD COLUMN temp_alarm INTEGER NOT NULL DEFAULT 0;
+  `,
 ];
 
 export function openDb(file = ':memory:') {

@@ -1,6 +1,6 @@
 # End-to-End-Ergebnis
 
-Ausgeführt: 2026-11-26T23:05:07.227Z · Chrome · Handy-Ansicht 390×844
+Ausgeführt: 2026-11-26T23:15:12.580Z · Chrome · Handy-Ansicht 390×844
 
 - ✅ Startseite: Sprache wählen und Demo ohne Login
 - ✅ Öffnung: eine Aufgabe pro Bildschirm, Erledigt

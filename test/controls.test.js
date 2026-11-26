@@ -139,6 +139,28 @@ describe('Kontrolllisten (Issue #20): Intervalle, Fälligkeit, Zuweisung, Pflich
     assert.ok(after.items[0].use_by);
     assert.equal(after.temperature, 3);
     await mgr.req('PUT', '/api/controls/settings', { branch: HALLE, use_within_hours: '' });
+    assert.equal(ok.data.temp_alarm, false);
+  });
+
+  test('Temperatur-Alarm: über +4 °C sofort Meldung an Leitung; Höchstwert nur mit Quelle änderbar', async () => {
+    const today = berlinDate();
+    ensureRuns(srv.db, HALLE, today, notify);
+    const r = srv.db.prepare('SELECT id FROM control_runs WHERE list_id = ? AND due_date = ? AND slot = 1').get(list('mariniert').id, today);
+    srv.db.prepare("UPDATE control_runs SET assigned_to = ?, status = 'open' WHERE id = ?").run(ids['demo.mitarbeiter.halle'], r.id);
+    const d = (await emp.get(`/api/controls/runs/${r.id}`)).data;
+    assert.equal(d.temp_max, 4);
+    const lines = d.items.map((i) => ({ item_id: i.id, qty: 0 }));
+    const res = (await emp.post(`/api/controls/runs/${r.id}`, { lines, temperature: 6.5, media_id: await emp.photo(HALLE) })).data;
+    assert.equal(res.temp_alarm, true);
+    const n = srv.db.prepare("SELECT * FROM notifications WHERE ref = ?").get(`ctl:${r.id}:temp`);
+    assert.equal(n.audience, 'manager'); assert.match(n.message, /6.5 °C/);
+    const ov = (await mgr.get(`/api/controls?branch=${HALLE}`)).data;
+    assert.equal(ov.runs.find((x) => x.id === r.id).temp_alarm, true);
+    assert.equal((await mgr.req('PUT', '/api/controls/settings', { branch: HALLE, temp_max: 3 })).data.error, 'temp_source');
+    assert.equal((await mgr.req('PUT', '/api/controls/settings', { branch: HALLE, temp_max: 30, temp_source: 'x' })).data.error, 'temp_max');
+    assert.equal((await mgr.req('PUT', '/api/controls/settings', { branch: HALLE, temp_max: 3, temp_source: 'HACCP-Plan Halle' })).status, 200);
+    assert.equal((await emp.get(`/api/controls/runs/${r.id}`)).data.temp_max, 3);
+    await mgr.req('PUT', '/api/controls/settings', { branch: HALLE, temp_max: 4, temp_source: 'DIN 10508' });
   });
 
   test('Erinnerung −10 / 0 / +5 Mitarbeiter, +10 Leitung; nach Neustart keine Flut; Erledigung stoppt Eskalation', async () => {

@@ -149,6 +149,7 @@ const T = {
   open_trainings: ['Offene Pflichtschulungen', 'Open required trainings', 'تدريبات إلزامية مفتوحة', 'Açık zorunlu eğitimler'],
   expired_training: ['abgelaufen – bitte wiederholen', 'expired – please repeat', 'منتهي – أعد من فضلك', 'süresi doldu – tekrarla'],
   valid_until: ['gültig bis', 'valid until', 'صالح حتى', 'geçerlilik'],
+  temp_too_high: ['Temperatur zu hoch – Filialleitung ist informiert', 'Temperature too high – manager has been notified', 'درجة الحرارة مرتفعة جدًا – تم إبلاغ المدير', 'Sıcaklık çok yüksek – müdür bilgilendirildi'],
   control_lists: ['Kontrolllisten', 'Check lists', 'قوائم المراقبة', 'Kontrol listeleri'],
   control_due: ['fällig bis', 'due by', 'مستحق حتى', 'son saat'],
   my_controls: ['Meine Kontrollen heute', 'My checks today', 'مراقباتي اليوم', 'Bugünkü kontrollerim'],
