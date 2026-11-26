@@ -83,3 +83,14 @@ Stand dieses Pull Requests. „Umgesetzt“ heißt: programmiert **und** durch a
 - Standard: Saucen und Marinaden nur wöchentlich, alle anderen Artikel täglich. Die Wocheninventur zählt immer alle Artikel.
 - Täglich in Früh- und Spätschicht gibt es die Aufgabe „Fleisch marinieren“. Erledigen lässt sie sich erst, wenn eine neue Charge im Marinierprotokoll eingetragen ist.
 - Wöchentlich (Standard: Montag, Schichtführer) gibt es die Aufgabe „Wareneingang der Woche prüfen“. Der Wochentag lässt sich unter **Leitung → Vorlagen** ändern.
+
+## Kontrolllisten (Issue #20, Nachtrag des Betreibers)
+- Einfache Ist-Mengen-Kontrolle als persönliche Aufgabe. Keine Buchungen, keine Einkaufspreise, keine automatischen Bestellungen, keine POS-Anbindung, keine Zeiterfassung. Wareneingang und Inventur bleiben zusätzlich bestehen (Entscheidung des Betreibers).
+- Listen je Filiale: Regal 1, Regal 2 (Saucen), Reinigungsmittel/Hygiene (wöchentlich, Standard Montag); Tiefkühlware (alle 3 Kalendertage ab Startdatum); Küche/Burger-Zutaten und frische Ware (täglich); mariniertes Fleisch (täglich 17:10 und 23:30). Rhythmus, Wochentag, Intervall, Startdatum, Uhrzeiten, Pflichtfoto, Einheiten und Mindestwerte stellt die Leitung je Filiale ein.
+- Artikel aus der Betreiberliste. Fehlende Mindestwerte und ungeklärte Einheiten sind als **offen** markiert und nicht erfunden; es betrifft z. B. Granatapfel Sauce, Tiefkühlware, Fleisch/Pommes, die Einheit der Marinaden sowie Bacon/Sucuk.
+- Pflichtfelder: Jede Position braucht eine Menge; 0 ist gültig, ein leeres Feld wird abgelehnt. Liegt die Menge unter dem Mindestwert, erscheint ein Nachbestellhinweis, und die Leitung wird informiert.
+- Mariniertes Fleisch: kg je Teil, mild und pikant getrennt, Marinierzeit, Kühltemperatur, Pflichtfoto. Eine Verbrauchsfrist wird nur berechnet, wenn die Leitung Stunden **mit Quelle** hinterlegt; sonst steht „laut freigegebenem Plan – noch nicht hinterlegt“.
+- Zuweisung: faire Verteilung an anwesende Mitarbeiter, Neuverteilung bei Abwesenheit, Leitung kann umverteilen. „Nicht zuweisbar“ wird ab 60 Minuten vor Fälligkeit an die Leitung gemeldet.
+- Erinnerung (Standard, je Filiale änderbar): 10 Minuten vorher, bei Fälligkeit und 5 Minuten danach an die verantwortliche Person; 10 Minuten danach an die Filialleitung. Der Minutentakt läuft auf dem Server, der Zustand liegt in der Datenbank. Nach einem Neustart wird nur die zuletzt erreichte Stufe gesendet; nach Erledigung kommt nichts mehr.
+- **Kein automatischer Telefonanruf** (Entscheidung des Betreibers). Externe Push- oder E-Mail-Kanäle sind nicht eingerichtet; die Erinnerungen erscheinen in der App.
+- Managerkontrolle: Bestätigen oder Nacharbeit mit Begründung; die Person, die eine Kontrolle erledigt hat, kann sie nicht selbst bestätigen.

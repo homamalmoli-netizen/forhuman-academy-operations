@@ -196,8 +196,54 @@ async function viewShift() {
       <ul class="plain">${d.open_trainings.map((o) => `<li><a href="#/learn/${o.course_id}">${esc(o.title)}</a>${o.expired ? ` <small class="badge warn">${esc(tr('expired_training'))}</small>` : ''}</li>`).join('')}</ul></section>` : '';
   const blocked = d.blocked.length ? `<section class="card muted"><h3>${icon('lock')} ${esc(tr('blocked_tasks'))}</h3>
       <ul class="plain">${d.blocked.map((b) => `<li>${icon(b.icon)} ${esc(b.title)}${b.station ? ` <small>(${esc(b.station)})</small>` : ''} ${b.reason === 'course' ? `<a href="#/learn/${b.required_course_id}">${esc(tr('tab_learn'))} →</a>` : `<small class="badge warn">${esc(tr('needs_station_check'))}</small>`}</li>`).join('')}</ul></section>` : '';
-  render(__seq, `<div class="segs">${shiftBtns}</div>${presence}${progress}${trainings}${body}${blocked}`);
+  const ctl = await get(`/api/controls/mine?branch=${S.branch}`).catch(() => ({ runs: [], reminders: [] }));
+  const ctlOpen = ctl.runs.filter((r) => r.state !== 'done' && r.state !== 'late_done');
+  const controls = (ctl.reminders.length || ctlOpen.length) ? `<section class="card banner-card controls-card">
+      ${ctl.reminders.map((m) => `<p class="reminder">${icon('warn')} ${esc(m.message)} <button class="small" data-action="note-read" data-id="${m.id}">${esc(tr('dismiss'))}</button></p>`).join('')}
+      ${ctlOpen.map((r) => `<a class="ctl-row ${r.state}" href="#/control/${r.id}">${icon(r.marinated ? 'prep' : 'box')} <b>${esc(r.list)}</b>
+        <span>${esc(tr('control_due'))} ${esc(r.due_time)}</span><span class="badge ${r.state === 'overdue' || r.state === 'rework' ? 'change' : 'warn'}">${esc(tr('ctl_' + r.state))}</span></a>`).join('')}</section>` : '';
+  render(__seq, `<div class="segs">${shiftBtns}</div>${presence}${controls}${progress}${trainings}${body}${blocked}`);
 }
+
+// --- Kontrolllisten (Ist-Mengen, keine Warenwirtschaft) ------------------------------------
+async function viewControls() {
+  const __seq = renderSeq;
+  let d;
+  try { d = await get(`/api/controls/mine?branch=${S.branch}`); } catch (e) { return render(__seq, errorBox(e)); }
+  render(__seq, `<h1 class="page-title">${icon('box')} ${esc(tr('my_controls'))}</h1>
+    ${d.runs.length ? `<div class="course-list">${d.runs.map((r) => `<a class="course" href="#/control/${r.id}">${icon(r.marinated ? 'prep' : 'box', 'big')}
+      <div><b>${esc(r.list)}</b><small>${esc(tr('control_due'))} ${esc(r.due_time)}${r.assigned_name ? ' · ' + esc(r.assigned_name) : ''}</small></div>
+      <span class="badge ${['done', 'late_done'].includes(r.state) ? 'ok' : r.state === 'open' ? 'warn' : 'change'}">${esc(tr('ctl_' + r.state))}</span></a>`).join('')}</div>`
+      : `<p class="note">${esc(tr('no_controls'))}</p>`}`);
+}
+
+async function viewControl(id) {
+  const __seq = renderSeq;
+  let r;
+  try { r = await get(`/api/controls/runs/${id}`); } catch (e) { return render(__seq, errorBox(e)); }
+  const done = ['done', 'late_done'].includes(r.state);
+  const nowLocal = () => { const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date()).map((x) => [x.type, x.value])); return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`; };
+  const row = (i) => `<li class="ctl-item ${i.reorder ? 'below' : ''}"><div class="ctl-name"><b>${esc(i.name)}</b>
+      <small>${i.unit === 'offen' ? esc(tr('unit_open')) : esc(i.unit)} · ${i.min_qty == null ? esc(tr('min_open')) : `${esc(tr('min_qty'))} ${i.min_qty}`}</small>
+      ${i.reorder ? `<span class="badge change">${esc(tr('below_min'))}</span>` : ''}</div>
+      <input name="qty_${i.id}" type="number" inputmode="decimal" step="0.01" min="0" required value="${i.qty ?? ''}" ${done ? 'disabled' : ''} aria-label="${esc(tr('qty_actual'))} ${esc(i.name)}">
+      ${r.marinated ? `<label class="ctl-sub">${esc(tr('marinated_at'))}<input name="mat_${i.id}" type="datetime-local" value="${esc(i.marinated_at || '')}" max="${nowLocal()}" ${done ? 'disabled' : ''}></label>
+        ${i.use_by ? `<small>${esc(tr('use_by_short'))} ${fmtTime(i.use_by)}</small>` : ''}` : ''}</li>`;
+  render(__seq, `<a class="back-link" href="#/controls">${icon('back')} ${esc(tr('my_controls'))}</a>
+    <form data-submit="control" data-id="${r.id}" class="card form"><h1>${icon(r.marinated ? 'prep' : 'box')} ${esc(r.list)}</h1>
+      <p><span class="badge ${done ? 'ok' : r.state === 'open' ? 'warn' : 'change'}">${esc(tr('ctl_' + r.state))}</span> ${esc(tr('control_due'))} <b>${esc(r.due_time)}</b>${r.assigned_name ? ' · ' + esc(r.assigned_name) : ''}</p>
+      ${r.review_note ? `<div class="banner">${icon('warn')} ${esc(r.review_note)}</div>` : ''}
+      <p class="note">${esc(tr('zero_ok'))}</p>
+      <ul class="plain ctl-list">${r.items.map(row).join('')}</ul>
+      ${r.marinated ? `<label>${esc(tr('temperature_c'))}<input name="temperature" type="number" inputmode="decimal" step="0.1" required value="${r.temperature ?? ''}" ${done ? 'disabled' : ''}></label>
+        ${r.use_within_hours ? '' : `<p class="note">${esc(tr('use_by_open'))}</p>`}` : ''}
+      ${done ? '' : `${r.photo_required ? photoField('evidence', tr('take_photo')) : photoField('evidence', tr('take_photo') + ' (optional)')}
+      <button class="primary block">${icon('check')} ${esc(tr('send'))}</button>`}
+    </form>`);
+}
+
+// (Kontrolllisten-Ende)
+
 
 function photoField(purpose, label) {
   const ready = S.photo && S.photo.purpose === purpose;
@@ -614,7 +660,7 @@ function viewMore() {
   render(__seq, `<h1 class="page-title">${icon('dash')} ${esc(tr('tab_more'))}</h1><div class="persona-grid more-grid">
     ${b('#/goods', 'scan', tr('tab_goods'))}${b('#/daily/early', 'sun', tr('daily_inventory') + ' ' + tr('early_shift'))}${b('#/daily/late', 'moon', tr('daily_inventory') + ' ' + tr('late_shift'))}
     ${b('#/inventory', 'box', tr('inventory'))}${b('#/oil', 'oil', tr('tab_oil'))}${b('#/marinade', 'prep', tr('marinade'))}${b('#/pest', 'bug', tr('pest_check'))}${b('#/handbook', 'book', tr('handbook'))}
-    ${b('#/help', 'book', tr('help_title'))}${b('#/train', 'school', tr('train_areas'))}${b('#/problem/', 'warn', tr('btn_problem'))}</div>`);
+    ${b('#/controls', 'box', tr('control_lists'))}${b('#/help', 'book', tr('help_title'))}${b('#/train', 'school', tr('train_areas'))}${b('#/problem/', 'warn', tr('btn_problem'))}</div>`);
 }
 
 // --- Reinigungsplan ------------------------------------------------------------------------
@@ -759,7 +805,7 @@ async function viewOil() {
 function manageNav(active) {
   const items = [['dashboard', 'dash', 'Übersicht'], ['positions', 'store', 'Positionsplan'], ['observe', 'eye', 'Stationscheck'], ['stations', 'star', 'Stationen & Stufen'],
     ['staff', 'lock', 'Mitarbeiter & Zugänge'], ['certs', 'shield', 'Nachweise (§43/METRO)'], ['staffing', 'user', 'Besetzung & Verteilung'], ['week', 'report', 'Wochenbericht'], ['daily', 'box', 'Tagesinventur'], ['onboarding', 'shield', 'Einarbeitung'], ['problems', 'warn', 'Probleme'], ['report', 'report', 'Schichtbericht'], ['templates', 'list', 'Aufgaben-Vorlagen'], ['products', 'history', 'Haltezeiten'],
-    ['academy', 'school', 'Schulungsbereiche'], ['training', 'school', 'Schulung & Freigaben'], ['stock', 'box', 'Bestand & Codes'], ['oil', 'oil', 'Öl-Grenzwerte'], ['audit', 'history', 'Protokoll']];
+    ['controls', 'box', 'Kontrolllisten'], ['academy', 'school', 'Schulungsbereiche'], ['training', 'school', 'Schulung & Freigaben'], ['stock', 'box', 'Bestand & Codes'], ['oil', 'oil', 'Öl-Grenzwerte'], ['audit', 'history', 'Protokoll']];
   if (S.me.is_admin) items.push(['recipes', 'prep', 'Rezepturen (Marinaden)'], ['sops', 'book', 'Anleitungen (SOP)'], ['users', 'user', 'Benutzer & Filialen']);
   const allowed = { dashboard: true, staffing: isShiftLead(), week: isShiftLead(), daily: isShiftLead(), onboarding: isTrainer(), positions: isShiftLead(), observe: isTrainer(), stations: isShiftLead() || isTrainer(), training: isTrainer() || isManager() };
   const visible = items.filter(([k]) => isManager() || allowed[k]);
@@ -769,7 +815,7 @@ function manageNav(active) {
 async function viewManage(sub = 'dashboard', arg) {
   const __seq = renderSeq;
   try {
-    const fn = { dashboard: mDashboard, academy: mAcademy, staff: mStaff, certs: mCerts, staffing: mStaffing, week: mWeek, recipes: mRecipes, daily: mDaily, onboarding: mOnboarding, positions: mPositions, observe: mObserve, stations: mStations, products: mProducts, problems: mProblems, report: mReport, templates: mTemplates, training: mTraining, stock: mStock, oil: mOil, audit: mAudit, sops: mSops, users: mUsers }[sub] || mDashboard;
+    const fn = { dashboard: mDashboard, controls: mControls, academy: mAcademy, staff: mStaff, certs: mCerts, staffing: mStaffing, week: mWeek, recipes: mRecipes, daily: mDaily, onboarding: mOnboarding, positions: mPositions, observe: mObserve, stations: mStations, products: mProducts, problems: mProblems, report: mReport, templates: mTemplates, training: mTraining, stock: mStock, oil: mOil, audit: mAudit, sops: mSops, users: mUsers }[sub] || mDashboard;
     const html = await fn(arg);
     render(__seq, `${manageNav(sub)}<div class="manage">${html}</div>`);
   } catch (e) { render(__seq, `${manageNav(sub)}${errorBox(e)}`); }
@@ -814,6 +860,38 @@ async function mDaily() {
       ${r.meat.lines.map((l) => `<tr><td>${esc(l.item)}</td><td>${l.start ?? '–'}</td><td>${l.incoming ?? '–'}</td><td><b>${l.usage ?? '–'}</b></td><td>${l.rest} ${esc(l.unit)}</td><td>${l.marinated ?? '–'}</td><td>${l.unusable ?? '–'}</td></tr>`).join('')}</tbody></table>
       <p class="note">Verbrauch = Anfangsbestand + Zugang (Wareneingang) − Restbestand − nicht verwendbare Ware.</p>` : ''}
     ${isManager() ? `<h2>Fristen</h2><form data-submit="daily-settings" class="inline card"><label>Frühschicht bis<input name="early" type="time" value="${esc(r.deadlines.early)}"></label><label>Spätschicht bis<input name="late" type="time" value="${esc(r.deadlines.late)}"></label><button class="small primary">Speichern</button></form>` : ''}`;
+}
+
+async function mControls() {
+  const d = await get(`/api/controls?branch=${S.branch}`);
+  const st = { open: ['offen', 'warn'], overdue: ['überfällig', 'change'], done: ['erledigt', 'ok'], late_done: ['verspätet', 'warn'], rework: ['Nacharbeit', 'change'] };
+  const wd = ['', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+  const rhythm = (l) => l.schedule === 'daily' ? 'täglich' : l.schedule === 'weekly' ? `wöchentlich (${wd[l.weekday]})` : `alle ${l.interval_days} Tage ab ${l.start_date}`;
+  const runRow = (r) => `<tr><td>${esc(r.list)}</td><td>${esc(r.due_time)}</td><td><span class="badge ${st[r.state][1]}">${st[r.state][0]}</span>${r.reviewed ? ' ✓' : ''}</td>
+    <td>${['done', 'late_done'].includes(r.state) ? esc(r.completed_name || '') : `<select data-change="ctl-assign" data-id="${r.id}" aria-label="Verantwortlich"><option value="">${r.assigned_name ? esc(r.assigned_name) : '– nicht zugewiesen –'}</option>${d.staff.map((p) => `<option value="${p.id}">${esc(p.display_name)}</option>`).join('')}</select>`}</td>
+    <td>${['done', 'late_done'].includes(r.state) && !r.reviewed ? `<form data-submit="ctl-review" data-id="${r.id}" class="inline"><input name="note" placeholder="Notiz" aria-label="Notiz"><button class="small primary" value="ok">ok</button><button class="small" value="rework">Nacharbeit</button></form>` : ''} <a href="#/control/${r.id}">ansehen</a></td></tr>`;
+  return `<h1>${icon('box')} Kontrolllisten</h1>
+    <p class="note">Einfache Ist-Mengen-Kontrolle als persönliche Aufgabe – keine Buchungen, keine Preise, keine automatischen Bestellungen. Erinnerung: 10 Min. vorher, bei Fälligkeit und +5 Min. an die verantwortliche Person, +10 Min. an die Filialleitung. Kein automatischer Anruf.</p>
+    <h2>Heute (${esc(d.date)})</h2><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Liste</th><th>Fällig</th><th>Status</th><th>Verantwortlich</th><th></th></tr></thead><tbody>${d.runs.map(runRow).join('') || '<tr><td colspan="5">Heute keine Kontrolle fällig.</td></tr>'}</tbody></table></div>
+    <h2>Unter Mindestbestand (letzte Kontrolle)</h2><ul class="plain">${d.below.map((b) => `<li>${icon('warn')} <b>${esc(b.name)}</b>: ${b.qty} / min. ${b.min_qty} ${esc(b.unit)} <small>(${esc(b.list)}, ${fmtTime(b.completed_at)})</small></li>`).join('') || '<li>Nichts unter Mindestbestand.</li>'}</ul>
+    ${d.missing_min ? `<p class="banner">${icon('warn')} ${d.missing_min} Artikel ohne Mindestwert – unten eintragen (leer = offen, wird nicht erfunden).</p>` : ''}
+    <h2>Verbrauchsfrist mariniertes Fleisch</h2>
+    <form data-submit="ctl-settings" class="form card inline"><label>Stunden (aus freigegebenem HACCP-Plan, leer = offen)<input name="use_within_hours" type="number" min="1" max="168" value="${d.use_within_hours ?? ''}"></label>
+      <label>Quelle<input name="source" placeholder="z. B. HACCP-Plan, Version/Datum"></label><button class="primary">Speichern</button></form>
+    <h2>Listen & Artikel</h2>
+    ${d.lists.map((l) => `<details class="card"><summary><b>${esc(l.name)}</b> · ${esc(rhythm(l))} · ${esc(l.due_times)} Uhr${l.active ? '' : ' · inaktiv'}</summary>
+      <form data-submit="ctl-list" data-id="${l.id}" class="form"><div class="grid2">
+        <label>Rhythmus<select name="schedule"><option value="daily" ${l.schedule === 'daily' ? 'selected' : ''}>täglich</option><option value="weekly" ${l.schedule === 'weekly' ? 'selected' : ''}>wöchentlich</option><option value="interval" ${l.schedule === 'interval' ? 'selected' : ''}>alle N Tage</option></select></label>
+        <label>Wochentag (bei wöchentlich)<select name="weekday">${[1, 2, 3, 4, 5, 6, 7].map((n) => `<option value="${n}" ${l.weekday === n ? 'selected' : ''}>${wd[n]}</option>`).join('')}</select></label>
+        <label>Alle N Tage<input name="interval_days" type="number" min="2" max="60" value="${l.interval_days ?? 3}"></label><label>Startdatum<input name="start_date" type="date" value="${esc(l.start_date || '')}"></label>
+        <label>Fällig um (HH:MM, mehrere mit Komma)<input name="due_times" value="${esc(l.due_times)}" required></label></div>
+        <label class="check"><input type="checkbox" name="photo_required" ${l.photo_required ? 'checked' : ''}> Foto Pflicht</label><label class="check"><input type="checkbox" name="active" ${l.active ? 'checked' : ''}> aktiv</label>
+        <button class="primary">Liste speichern</button></form>
+      <table class="tbl"><thead><tr><th>Artikel</th><th>Einheit</th><th>Mindestwert</th><th></th></tr></thead><tbody>
+      ${l.items.map((i) => `<tr><td>${esc(i.name)}</td><td colspan="3"><form data-submit="ctl-item" data-id="${i.id}" class="inline"><input name="unit" value="${esc(i.unit)}" aria-label="Einheit" size="8">
+        <input name="min_qty" type="number" step="0.01" min="0" value="${i.min_qty ?? ''}" placeholder="offen" aria-label="Mindestwert" size="6"><button class="small">speichern</button></form></td></tr>`).join('')}</tbody></table>
+      <form data-submit="ctl-item-new" data-id="${l.id}" class="inline"><input name="name" placeholder="Neuer Artikel" required aria-label="Neuer Artikel"><input name="unit" placeholder="Einheit" aria-label="Einheit" size="8"><input name="min_qty" type="number" step="0.01" min="0" placeholder="min." aria-label="Mindestwert" size="6"><button class="small primary">hinzufügen</button></form>
+    </details>`).join('')}`;
 }
 
 async function mAcademy(arg) {
@@ -1195,6 +1273,8 @@ async function route() {
     case 'marinade': return viewMarinade();
     case 'more': return viewMore();
     case 'welcome': return viewWelcome();
+    case 'controls': return viewControls();
+    case 'control': return viewControl(b);
     case 'train': return b ? viewTrainModule(b) : viewTrain();
     case 'texam': return viewTrainExam(b);
     case 'help': return viewHelp();
@@ -1236,6 +1316,7 @@ document.addEventListener('click', async (ev) => {
     if (A === 'print') return window.print();
     if (A === 'tpl-move') { await post(`/api/templates/${el.dataset.id}/move`, { dir: el.dataset.dir }); return route(); }
     if (A === 'tpl-photo') { await api('PATCH', `/api/templates/${el.dataset.id}`, { requires_photo: el.dataset.val === '1' }); return route(); }
+    if (A === 'note-read') { await post(`/api/notifications/${el.dataset.id}/read`); return route(); }
     if (A === 'train-start') { const r = await post(`/api/train/modules/${el.dataset.id}/start`, { branch: S.branch, lang: S.lang }); location.hash = `#/texam/${r.attempt_id}`; return; }
     if (A === 'staff-reset') { const r = await post(`/api/staff/${el.dataset.id}/reset`); S.lastInvite = { name: el.dataset.name, ...r }; S.flash = { type: 'ok', text: 'Neuer Code erstellt – altes Passwort ist ungültig.' }; return route(); }
     if (A === 'staff-active') { await post(`/api/staff/${el.dataset.id}/active`, { active: el.dataset.val === '1' }); S.flash = { type: 'ok', text: tr('saved') }; return route(); }
@@ -1273,6 +1354,7 @@ document.addEventListener('change', async (ev) => {
   try {
     if (C === 'lang') { setLang(el.value); return route(); }
     if (C === 'branch') { S.branch = Number(el.value); localStorage.setItem('fh_branch', S.branch); return route(); }
+    if (C === 'ctl-assign') { await post(`/api/controls/runs/${el.dataset.id}/assign`, { user_id: Number(el.value) }); S.flash = { type: 'ok', text: tr('saved') }; return route(); }
     if (C === 'item-rhythm') { await api('PUT', `/api/items/${el.dataset.id}/rhythm`, { branch: S.branch, rhythm: el.value }); S.flash = { type: 'ok', text: tr('saved') }; return route(); }
     if (C === 'staff-role') {
       const row = el.closest('[data-user]');
@@ -1343,6 +1425,22 @@ document.addEventListener('submit', async (ev) => {
         const r = await post(`/api/courses/${id}/exam`, { branch: S.branch, lang: form.dataset.lang, answers });
         return viewExamResult(id, r, qsList);
       }
+      case 'control': {
+        const r = await get(`/api/controls/runs/${form.dataset.id}`);
+        const lines = r.items.map((i) => ({ item_id: i.id, qty: fd['qty_' + i.id], marinated_at: fd['mat_' + i.id] || '' }));
+        const res = await post(`/api/controls/runs/${form.dataset.id}`, { lines, temperature: fd.temperature, media_id: S.photo?.purpose === 'evidence' ? S.photo.id : undefined });
+        S.photo = null;
+        S.flash = { type: res.below?.length ? 'warn' : 'ok', text: res.below?.length ? `${tr('saved')} · ${tr('below_min')}: ${res.below.join(', ')}` : tr('saved') };
+        location.hash = '#/controls'; return;
+      }
+      case 'ctl-list': {
+        await api('PUT', `/api/controls/lists/${form.dataset.id}`, { schedule: fd.schedule, weekday: fd.weekday, interval_days: fd.interval_days, start_date: fd.start_date, due_times: fd.due_times, photo_required: !!fd.photo_required, active: !!fd.active });
+        S.flash = { type: 'ok', text: tr('saved') }; break;
+      }
+      case 'ctl-item': await api('PUT', `/api/controls/items/${form.dataset.id}`, { unit: fd.unit, min_qty: fd.min_qty }); S.flash = { type: 'ok', text: tr('saved') }; break;
+      case 'ctl-item-new': await post(`/api/controls/lists/${form.dataset.id}/items`, { name: fd.name, unit: fd.unit, min_qty: fd.min_qty }); S.flash = { type: 'ok', text: tr('saved') }; break;
+      case 'ctl-review': await post(`/api/controls/runs/${form.dataset.id}/review`, { ok: submitter?.value !== 'rework', note: fd.note }); S.flash = { type: 'ok', text: tr('saved') }; break;
+      case 'ctl-settings': await api('PUT', '/api/controls/settings', { branch: S.branch, use_within_hours: fd.use_within_hours, source: fd.source }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'train-exam': {
         const n = form.querySelectorAll('fieldset').length;
         const answers = [...Array(n)].map((_, i) => Number(fd['q' + i]));

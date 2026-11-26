@@ -738,6 +738,69 @@ const MIGRATIONS = [
   `
   UPDATE items SET daily_count = 0 WHERE daily_count = 1 AND category IN ('Sauce','Marinade');
   `,
+  // 11: Periodische Bestands-Kontrolllisten (keine Warenwirtschaft), persönliche Erinnerungen an Mitarbeiter.
+  `
+  CREATE TABLE control_lists (
+    id INTEGER PRIMARY KEY,
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    code TEXT NOT NULL,
+    name TEXT NOT NULL,
+    schedule TEXT NOT NULL CHECK (schedule IN ('daily','weekly','interval')),
+    weekday INTEGER CHECK (weekday IS NULL OR weekday BETWEEN 1 AND 7),
+    interval_days INTEGER CHECK (interval_days IS NULL OR interval_days BETWEEN 2 AND 60),
+    start_date TEXT,
+    due_times TEXT NOT NULL,                 -- HH:MM[,HH:MM] Ortszeit Berlin
+    photo_required INTEGER NOT NULL DEFAULT 0,
+    marinated INTEGER NOT NULL DEFAULT 0,    -- zusätzlich Kühltemperatur und Marinierzeit je Position
+    role TEXT NOT NULL DEFAULT 'all' CHECK (role IN ('all','shift_lead')),
+    active INTEGER NOT NULL DEFAULT 1,
+    position INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (branch_id, code)
+  );
+  CREATE TABLE control_items (
+    id INTEGER PRIMARY KEY,
+    list_id INTEGER NOT NULL REFERENCES control_lists(id),
+    name TEXT NOT NULL,
+    unit TEXT NOT NULL,
+    min_qty REAL CHECK (min_qty IS NULL OR min_qty >= 0),   -- NULL = Mindestwert offen
+    position INTEGER NOT NULL DEFAULT 0,
+    active INTEGER NOT NULL DEFAULT 1
+  );
+  CREATE TABLE control_runs (
+    id INTEGER PRIMARY KEY,
+    list_id INTEGER NOT NULL REFERENCES control_lists(id),
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    due_date TEXT NOT NULL,
+    slot INTEGER NOT NULL DEFAULT 0,
+    due_time TEXT NOT NULL,
+    due_at TEXT NOT NULL,                    -- UTC
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','done','rework')),
+    assigned_to INTEGER REFERENCES users(id),
+    assignment_mode TEXT CHECK (assignment_mode IS NULL OR assignment_mode IN ('auto','manager')),
+    completed_by INTEGER REFERENCES users(id),
+    completed_at TEXT,
+    on_time INTEGER,
+    temperature REAL,
+    media_id INTEGER REFERENCES media(id),
+    note TEXT,
+    reviewed_by INTEGER REFERENCES users(id),
+    reviewed_at TEXT,
+    review_note TEXT,
+    UNIQUE (list_id, due_date, slot)
+  );
+  CREATE INDEX idx_ctl_runs ON control_runs(branch_id, due_date, status);
+  CREATE TABLE control_run_lines (
+    run_id INTEGER NOT NULL REFERENCES control_runs(id),
+    item_id INTEGER NOT NULL REFERENCES control_items(id),
+    qty REAL NOT NULL CHECK (qty >= 0),
+    reorder INTEGER,                         -- 1 = unter Mindestwert, 0 = ok, NULL = Mindestwert offen
+    marinated_at TEXT,
+    use_by TEXT,
+    PRIMARY KEY (run_id, item_id)
+  );
+  ALTER TABLE notifications ADD COLUMN user_id INTEGER REFERENCES users(id);
+  ALTER TABLE notifications ADD COLUMN audience TEXT NOT NULL DEFAULT 'manager';
+  `,
 ];
 
 export function openDb(file = ':memory:') {

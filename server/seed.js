@@ -6,6 +6,7 @@ import { hashPassword } from './auth.js';
 import { EXTRA_COURSES } from './courses-extra.js';
 import { DAILY_ITEMS } from './handbook.js';
 import { seedTraining } from './training.js';
+import { seedControls } from './controls.js';
 
 const L = (de, en, ar, tr) => ({ de, en, ar, tr });
 
@@ -390,7 +391,7 @@ export function seedBase(db, { dailyItems = true } = {}) {
   if (dailyItems) seedDailyItems(db);
   seedTraining(db);
   // Startvorlagen je Filiale (Manager kann sie danach ändern, sortieren, abschalten)
-  for (const b of db.prepare('SELECT id FROM branches').all()) { seedStations(db, b.id); seedTemplates(db, b.id); }
+  for (const b of db.prepare('SELECT id FROM branches').all()) { seedStations(db, b.id); seedTemplates(db, b.id); seedControls(db, b.id); }
 }
 
 function idBy(db, table, code) {

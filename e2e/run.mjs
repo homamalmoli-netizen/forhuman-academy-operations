@@ -572,6 +572,34 @@ try {
     await p.locator('.course-list .course').first().waitFor();
     await shotFull(p, '55-hilfe-suche');
   });
+
+  await step('Kontrollliste: Mitarbeiter trägt Ist-Mengen ein (0 gültig) und schließt ab', async () => {
+    await nav(p, '#/controls');
+    const link = p.locator('a.course:not(:has-text("Mariniertes"))').first();
+    await link.waitFor();
+    await shot(p, '57-meine-kontrollen');
+    await link.click();
+    await p.locator('form[data-submit=control]').waitFor();
+    const inputs = p.locator('form[data-submit=control] input[type=number]');
+    const n = await inputs.count();
+    for (let i = 0; i < n; i++) await inputs.nth(i).fill(i === 0 ? '0' : '100');
+    await shotFull(p, '58-kontrollliste-ausfuellen');
+    await p.click('form[data-submit=control] button.primary');
+    await p.locator('.flash').waitFor();
+    assert.match(await p.locator('.flash').innerText(), /Gespeichert/);
+  });
+
+  await step('Kontrollliste mariniertes Fleisch auf Arabisch (RTL)', async () => {
+    await p.selectOption('select[data-change=lang]', 'ar').catch(() => {});
+    await nav(p, '#/controls');
+    const m = p.locator('a.course', { hasText: 'Mariniertes' }).first();
+    await m.waitFor();
+    await m.click();
+    await p.locator('form[data-submit=control] input[name=temperature]').waitFor();
+    assert.equal(await p.evaluate(() => document.documentElement.dir), 'rtl');
+    await shotFull(p, '59-mariniert-arabisch');
+    await p.selectOption('select[data-change=lang]', 'de').catch(() => {});
+  });
   assert.deepEqual(p.errors.concat(sl.errors, tr2.errors), [], 'JavaScript-Fehler: ' + p.errors.concat(sl.errors, tr2.errors).join('; '));
 
   const a = await newPage();
@@ -586,6 +614,12 @@ try {
     await a.click('a[href="#/manage/recipes/neu"]');
     await a.locator('form[data-submit=recipe]').waitFor();
     await shotFull(a, '42-rezeptur-bearbeiten');
+  });
+
+  await step('Leitung: Kontrolllisten – Tagesübersicht, Unterbestand, Mindestwerte, Intervalle', async () => {
+    await a.click('a[href="#/manage/controls"]');
+    await a.locator('h2', { hasText: 'Unter Mindestbestand' }).waitFor();
+    await shotFull(a, '60-leitung-kontrolllisten');
   });
 
   await step('Betreiber: Schulungsbereiche – Übersicht, Fragenpool, Inhalte und Fragen bearbeiten', async () => {

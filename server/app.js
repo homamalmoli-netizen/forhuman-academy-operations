@@ -17,6 +17,7 @@ import { registerOil, oilStatus, ensureOilTemplates, oilChangeDue } from './oil.
 import { registerAssign, autoAssign, shiftCandidates } from './assign.js';
 import { registerAccounts, certStatus } from './accounts.js';
 import { registerTraining } from './training.js';
+import { registerControls, seedControls } from './controls.js';
 
 export const LANGS = ['de', 'ar', 'en', 'tr'];
 const SHIFTS = ['open', 'run', 'close'];
@@ -562,7 +563,7 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
         stock_below_min: stockOf(db, branchId).filter((s) => s.below_min).length,
         unknown_codes: db.prepare("SELECT COUNT(*) n FROM unknown_codes WHERE branch_id = ? AND status = 'open'").get(branchId).n,
         oil: db.prepare('SELECT * FROM fryers WHERE branch_id = ?').all(branchId).map((f) => ({ id: f.id, name: f.name, ...oilStatus(db, f) })),
-        notifications: db.prepare('SELECT * FROM notifications WHERE branch_id = ? ORDER BY id DESC LIMIT 10').all(branchId),
+        notifications: db.prepare("SELECT * FROM notifications WHERE branch_id = ? AND audience = 'manager' ORDER BY id DESC LIMIT 10").all(branchId),
         ...stationDashboard(db, branchId),
         inventory: inventoryStatus(db, branchId, date),
         daily: dailyStatus(db, branchId, date),
@@ -917,6 +918,7 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
     const id = Number(db.prepare('INSERT INTO branches (code, name) VALUES (?,?)').run(code, name.slice(0, 60)).lastInsertRowid);
     seedStations(db, id);
     seedTemplates(db, id);
+    seedControls(db, id);
     audit(db, { actor: a.id, branch: id, action: 'create', entity: 'branch', id });
     return { id };
   });
@@ -989,6 +991,7 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
   registerAssign({ route, db, needUser, needBranch, HttpError, bad, notFound, notify });
   registerAccounts({ route, db, needUser, needBranch, needAdmin, HttpError, bad, notFound, notify });
   registerTraining({ route, db, needUser, needBranch, needAdmin, HttpError, bad, notFound });
+  registerControls({ route, db, needUser, needBranch, HttpError, bad, notFound, can, mediaInBranch });
   route('PATCH', '/api/courses/:id', (ctx) => {
     const a = needAdmin(ctx);
     const c = db.prepare('SELECT * FROM courses WHERE id = ?').get(Number(ctx.params.id));
