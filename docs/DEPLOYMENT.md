@@ -12,16 +12,20 @@ Nötig ist ein **STRATO VPS / V-Server mit Linux** (Ubuntu oder Debian). Die Dom
 ## Einrichtung (einmalig, auf dem Server)
 
 ```bash
+# 0. Node.js (aktuelle LTS, mind. 22.13) und einen eigenen Systembenutzer anlegen
+#    Node z. B. über die offiziellen Pakete von nodejs.org bzw. NodeSource installieren, dann prüfen:
+node --version
+sudo useradd --system --create-home --shell /usr/sbin/nologin forhuman
 # 1. Code holen
 git clone https://github.com/homamalmoli-netizen/forhuman-academy-operations.git /opt/forhuman-academy
 # 2. Daten außerhalb des Code-Ordners anlegen
 sudo mkdir -p /var/lib/forhuman/uploads && sudo chown -R forhuman:forhuman /var/lib/forhuman && sudo chmod 700 /var/lib/forhuman
 # 3. Ersten Betreiber anlegen – Passwort wird verdeckt abgefragt (min. 12 Zeichen), nie im Repository
 cd /opt/forhuman-academy
-DATABASE_FILE=/var/lib/forhuman/app.db node --no-warnings scripts/create-admin.js betreiber "Name des Betreibers"
+sudo -u forhuman DATABASE_FILE=/var/lib/forhuman/app.db node --no-warnings scripts/create-admin.js betreiber "Name des Betreibers"
 ```
 
-Danach anmelden, unter **Leitung → Benutzer & Filialen** Filialleitungen, Trainer und Mitarbeiter für Halle und Leuna anlegen.
+Danach anmelden, unter **Leitung → Benutzer & Filialen** die Filialen anlegen und unter **Leitung → Mitarbeiter & Zugänge** Konten erstellen. Jede Person bekommt einen Einladungscode und legt ihr Passwort selbst fest.
 Es gibt keine Standardpasswörter und keinen Demo-Zugang im Echtbetrieb.
 
 ## Dienst starten (systemd)
