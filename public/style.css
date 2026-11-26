@@ -279,3 +279,11 @@ html, body { overflow-x: hidden; }
 .checks .ico { color: var(--ok); margin-top: 2px; }
 .chapter summary { font-size: 1.05rem; }
 .area-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
+
+/* Marinaden */
+.label-card { display: grid; gap: 2px; border: 2px dashed var(--black); border-radius: 10px; padding: 10px; background: #fff; font-size: .9rem; }
+.label-card b:first-child { font-size: 1.2rem; letter-spacing: .03em; }
+.ok-card { border-color: var(--ok); background: #f3fbf5; }
+.expired-batch { border-color: var(--red); background: #fff6f6; }
+.grid3 { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 6px; }
+@media print { .label-card { border: 2px solid #000; } }

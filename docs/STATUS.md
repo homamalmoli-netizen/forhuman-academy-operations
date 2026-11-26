@@ -22,6 +22,7 @@ Stand dieses Pull Requests. „Umgesetzt“ heißt: programmiert **und** durch a
 - Haltezeit-/Garzeit-Timer mit Ablaufwarnung; abgelaufen → nur Entsorgen; Übersicht zählt nicht entsorgte Ware
 - Tagesinventur Früh (17:00) / Spät (23:00) mit Pünktlichkeits-Übersicht und Erinnerungen; Fleisch-Auswertung
 - Schädlingskontrolle nach Betreiber-Vorlage; Mitarbeiter-Handbuch mit digitaler Einarbeitungsbestätigung
+- Marinaden-Protokoll mit fester, versionierter Rezeptur, Chargen-Etikett, Restmengen und Entsorgung
 
 ## Nicht umgesetzt / bewusst offen
 
@@ -31,7 +32,7 @@ Stand dieses Pull Requests. „Umgesetzt“ heißt: programmiert **und** durch a
 | Abgleich mit dem Replit-Projekt | Kein Zugriff auf das Replit-Projekt aus dieser Sitzung. Dieser Branch ist vom Prototyp in PR #2 abgeleitet und ersetzt ihn vollständig |
 | Echte Videos und Fotos in Schulungen | Müssen vom ForHuman-Team erstellt oder lizenziert werden. Aktuell Symbole statt Fotos |
 | Geräte-Anleitungen (GGM, Frymaster, Henny Penny) | Herstellerhandbücher / genaues GGM-Modell fehlen. Inhalte sind als „Entwurf – nicht zur Anwendung“ markiert; keine Drücke, Temperaturen, Ölwechsel-Schritte erfunden |
-| Marinaden-Protokoll mit fester Rezeptur (Handbuch Kap. 6) | Noch nicht gebaut. Rezepturen gehören nicht ins öffentliche Repository, sondern nur in die Datenbank – Umsetzung als nächster Schritt möglich |
+| Echte Marinaden-Rezepturen, Toleranzen, Verwendungsfristen | Trägt der Betreiber selbst in der App ein (Leitung → Rezepturen). Nur in der Datenbank, nie im Repository |
 | Kassenbuch / Kassenabschluss (Handbuch Kap. 9) | Gehört ins Kassensystem (POS); hier nur als Regeltext im Handbuch |
 | Einheiten der Tagesinventur | Aus der Vorlage übernommen (Fleisch/Pommes/Panade/Marinade kg, Saucen/Öl L, Rest Stück) – bitte prüfen |
 | Haltezeiten und Garzeiten je Produkt | Nur aus Herstellerangabe / freigegebener Rezeptur / HACCP-Plan. In Produktion leer; Demo-Werte sind als fiktiv markiert |

@@ -461,4 +461,9 @@ export function seedDemo(db) {
     }
   });
   seedDailyItems(db);
+  // Fiktive Demo-Rezeptur – keine echte ForHuman-Rezeptur
+  const mid = db.prepare("INSERT INTO marinades (name) VALUES ('DEMO Marinade mild (fiktiv)')").run().lastInsertRowid;
+  db.prepare(`INSERT INTO marinade_versions (marinade_id, version, ingredients, allergens, tolerance_percent, use_within_hours, use_source, created_by)
+    VALUES (?, 1, ?, 'DEMO: Allergene laut Allergenliste der Filiale', 5, 24, 'DEMO-Wert (fiktiv) – nicht für den Betrieb', (SELECT id FROM users WHERE username = 'demo.admin'))`)
+    .run(mid, JSON.stringify([{ name: 'DEMO Zutat A', per_kg: 50, unit: 'g' }, { name: 'DEMO Zutat B', per_kg: 20, unit: 'g' }, { name: 'DEMO Flüssigkeit C', per_kg: 100, unit: 'ml' }]));
 }

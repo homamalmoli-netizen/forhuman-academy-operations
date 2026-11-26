@@ -364,7 +364,8 @@ async function viewGoods() {
       <a class="secondary" href="#/daily/early">${icon('sun')} ${esc(tr('daily_inventory'))} ${esc(tr('early_shift'))}</a>
       <a class="secondary" href="#/daily/late">${icon('moon')} ${esc(tr('daily_inventory'))} ${esc(tr('late_shift'))}</a>
       <a class="secondary" href="#/inventory">${icon('box')} ${esc(tr('inventory'))}</a>
-      <a class="secondary" href="#/pest">${icon('bug')} ${esc(tr('pest_check'))}</a></div>
+      <a class="secondary" href="#/pest">${icon('bug')} ${esc(tr('pest_check'))}</a>
+      <a class="secondary" href="#/marinade">${icon('prep')} ${esc(tr('marinade'))}</a></div>
     <section class="card">
       <form data-submit="scan" class="form scan-form">
         <label>${esc(tr('scan_or_type'))}<input name="code" autocomplete="off" inputmode="text" value="${esc(sc?.raw || '')}"></label>
@@ -480,6 +481,41 @@ async function viewPest() {
     <h2>${icon('history')} Verlauf</h2><ul class="plain">${d.history.map((h) => `<li>${fmtTime(h.created_at)} · ${esc(h.by)} · ${h.infestation ? `<b class="bad-text">Befall: ${esc(h.areas.filter((a) => a.finding).map((a) => a.area).join(', '))}</b>` : 'kein Befall'}${h.exterminator_needed ? ' · Schädlingsbekämpfer erforderlich' : ''}</li>`).join('') || '<li>–</li>'}</ul>`);
 }
 
+// --- Marinaden-Protokoll -----------------------------------------------------------------
+let marinadeSel = {}, lastBatch = null;
+function batchLabel(b) {
+  return `<div class="label-card"><b>${esc(b.batch_code)}</b><span>${esc(b.marinade)}</span><span>${esc(b.meat)} · ${b.meat_kg} kg</span>
+    <span>${fmtTime(b.created_at)} · ${esc(b.by)}</span>${b.use_by ? `<span><b>${esc(tr('use_by'))} ${fmtTime(b.use_by)}</b></span>` : ''}${b.allergens ? `<span>${esc(tr('allergens'))}: ${esc(b.allergens)}</span>` : ''}</div>`;
+}
+async function viewMarinade() {
+  const __seq = renderSeq;
+  let d;
+  try { d = await get(`/api/marinades?branch=${S.branch}`); } catch (e) { return render(__seq, errorBox(e)); }
+  const r = d.recipes.find((x) => x.id === Number(marinadeSel.recipe)) || d.recipes[0];
+  const kg = Number(marinadeSel.kg) || 0;
+  const tgt = (ing) => Math.round(ing.per_kg * kg * 1000) / 1000;
+  render(__seq, `<h1 class="page-title">${icon('prep')} ${esc(tr('marinade'))}</h1>
+    ${lastBatch ? `<section class="card ok-card"><h2>${icon('check')} ${esc(tr('label'))}</h2><p class="note">Diese Angaben auf den Behälter schreiben bzw. Etikett drucken.</p>${batchLabel(lastBatch)}<button class="secondary" data-action="print">Drucken</button></section>` : ''}
+    ${!d.recipes.length ? '<section class="card">Noch keine Rezeptur hinterlegt. Der Betreiber legt Rezepturen unter Leitung → Rezepturen an.</section>' : `
+    <form data-submit="batch" class="form card">
+      <div class="banner">${icon('book')} ${esc(tr('recipe_fixed'))}</div>
+      <div class="grid2"><label>${esc(tr('recipe'))}<select name="marinade_id" data-change="marinade-recipe">${d.recipes.map((x) => `<option value="${x.id}" ${x.id === r.id ? 'selected' : ''}>${esc(x.name)} (v${x.version})</option>`).join('')}</select></label>
+        <label>${esc(tr('meat_type'))}<select name="meat_item_id" required>${d.meat_items.map((m) => `<option value="${m.id}" ${m.id === Number(marinadeSel.meat) ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select></label>
+        <label>${esc(tr('meat_kg'))}<input name="meat_kg" type="number" inputmode="decimal" step="0.01" min="0.01" value="${kg || ''}" data-change="marinade-kg" required></label></div>
+      ${r.allergens ? `<p><b>${esc(tr('allergens'))}:</b> ${esc(r.allergens)}</p>` : ''}
+      ${kg ? `<table class="tbl"><thead><tr><th>Zutat</th><th>${esc(tr('target'))}</th><th>${esc(tr('weighed'))}</th></tr></thead><tbody>
+        ${r.ingredients.map((ing, i) => `<tr><td>${esc(ing.name)}</td><td><b>${tgt(ing)} ${esc(ing.unit)}</b></td><td><input name="a${i}" type="number" inputmode="decimal" step="0.1" min="0" required aria-label="${esc(ing.name)}"> ${esc(ing.unit)}</td></tr>`).join('')}</tbody></table>
+        <p class="note">${r.tolerance_percent != null ? `Erlaubte Abweichung: ${r.tolerance_percent} %.` : 'Abweichungen werden der Leitung gemeldet.'} ${r.use_within_hours ? `Verwendbar ${r.use_within_hours} Std. (${esc(r.use_source)}).` : ''}</p>
+        <label>Notiz<input name="note"></label><button class="primary block">${icon('check')} ${esc(tr('create_batch'))}</button>` : '<p class="note">Erst Fleischmenge eingeben – dann werden die Zutatenmengen berechnet.</p>'}
+    </form>`}
+    <h2>${icon('box')} ${esc(tr('active_batches'))}</h2>
+    ${d.active.map((b) => `<section class="card batch ${b.expired ? 'expired-batch' : ''}">${batchLabel(b)}${b.expired ? `<p class="bad-text"><b>${icon('warn')} Frist abgelaufen – entsorgen</b></p>` : ''}
+      <p>${esc(tr('rest_kg'))}: <b>${b.remaining_kg ?? b.meat_kg}</b>${b.deviations ? ` · <span class="badge warn">${b.deviations} Abweichung(en)</span>` : ''}</p>
+      <form data-submit="batch-rest" data-id="${b.id}" class="inline">${!b.expired ? `<input name="remaining_kg" type="number" step="0.01" min="0" max="${b.meat_kg}" placeholder="${esc(tr('rest_kg'))}" aria-label="${esc(tr('rest_kg'))}"><button class="small" name="act" value="rest">Rest speichern</button>` : ''}
+        <input name="reason" placeholder="Grund" aria-label="Grund"><button class="small danger" name="act" value="discard">${esc(tr('discard'))}</button></form></section>`).join('') || '<p class="note">–</p>'}
+    <details><summary>${icon('history')} Verlauf</summary><ul class="plain">${d.recent.map((b) => `<li>${esc(b.batch_code)} · ${esc(b.marinade)} · ${esc(b.meat)} ${b.meat_kg} kg · ${b.status === 'used' ? 'aufgebraucht' : 'entsorgt: ' + esc(b.discard_reason || '')}</li>`).join('') || '<li>–</li>'}</ul></details>`);
+}
+
 // --- Mitarbeiter-Handbuch ---------------------------------------------------------------
 async function viewHandbook() {
   const __seq = renderSeq;
@@ -548,7 +584,7 @@ function manageNav(active) {
   const items = [['dashboard', 'dash', 'Übersicht'], ['positions', 'store', 'Positionsplan'], ['observe', 'eye', 'Stationscheck'], ['stations', 'star', 'Stationen & Stufen'],
     ['daily', 'box', 'Tagesinventur'], ['onboarding', 'shield', 'Einarbeitung'], ['problems', 'warn', 'Probleme'], ['report', 'report', 'Schichtbericht'], ['templates', 'list', 'Aufgaben-Vorlagen'], ['products', 'history', 'Haltezeiten'],
     ['training', 'school', 'Schulung & Freigaben'], ['stock', 'box', 'Bestand & Codes'], ['oil', 'oil', 'Öl-Grenzwerte'], ['audit', 'history', 'Protokoll']];
-  if (S.me.is_admin) items.push(['sops', 'book', 'Anleitungen (SOP)'], ['users', 'user', 'Benutzer & Filialen']);
+  if (S.me.is_admin) items.push(['recipes', 'prep', 'Rezepturen (Marinaden)'], ['sops', 'book', 'Anleitungen (SOP)'], ['users', 'user', 'Benutzer & Filialen']);
   const allowed = { dashboard: true, daily: isShiftLead(), onboarding: isTrainer(), positions: isShiftLead(), observe: isTrainer(), stations: isShiftLead() || isTrainer(), training: isTrainer() || isManager() };
   const visible = items.filter(([k]) => isManager() || allowed[k]);
   return `<nav class="subnav">${visible.map(([k, ic, l]) => `<a href="#/manage/${k}" class="${active === k ? 'on' : ''}">${icon(ic)} ${l}</a>`).join('')}</nav>`;
@@ -557,7 +593,7 @@ function manageNav(active) {
 async function viewManage(sub = 'dashboard', arg) {
   const __seq = renderSeq;
   try {
-    const fn = { dashboard: mDashboard, daily: mDaily, onboarding: mOnboarding, positions: mPositions, observe: mObserve, stations: mStations, products: mProducts, problems: mProblems, report: mReport, templates: mTemplates, training: mTraining, stock: mStock, oil: mOil, audit: mAudit, sops: mSops, users: mUsers }[sub] || mDashboard;
+    const fn = { dashboard: mDashboard, recipes: mRecipes, daily: mDaily, onboarding: mOnboarding, positions: mPositions, observe: mObserve, stations: mStations, products: mProducts, problems: mProblems, report: mReport, templates: mTemplates, training: mTraining, stock: mStock, oil: mOil, audit: mAudit, sops: mSops, users: mUsers }[sub] || mDashboard;
     const html = await fn(arg);
     render(__seq, `${manageNav(sub)}<div class="manage">${html}</div>`);
   } catch (e) { render(__seq, `${manageNav(sub)}${errorBox(e)}`); }
@@ -576,6 +612,7 @@ async function mDashboard() {
       <article class="stat"><small>Schulung</small><b>${d.training.qualified}/${d.training.learners * d.training.courses}</b><span>Qualifikationen</span></article>
       <article class="stat ${['overdue', 'due'].includes(d.inventory.state) ? 'bad' : ''}"><small>Inventur ${esc(d.inventory.week)}</small><b>${esc({ done: 'erledigt', due: 'heute', overdue: 'überfällig', upcoming: 'offen' }[d.inventory.state])}</b><span><a href="#/inventory">öffnen →</a> · fällig ${new Date(d.inventory.due_date).toLocaleDateString('de-DE')}</span></article>
       ${['early', 'late'].map((k) => `<article class="stat ${['missed', 'late_done'].includes(d.daily[k].state) ? 'bad' : ''}"><small>Tagesinventur ${k === 'early' ? 'Früh' : 'Spät'} (bis ${esc(d.daily[k].deadline)})</small><b>${esc(DSTATE[d.daily[k].state][0])}</b><span>${d.daily[k].by ? esc(d.daily[k].by) : '<a href="#/manage/daily">ansehen →</a>'}</span></article>`).join('')}
+      <article class="stat ${d.marinade_batches.expired ? 'bad' : ''}"><small>Marinaden-Chargen offen</small><b>${d.marinade_batches.n}</b><span>${d.marinade_batches.expired || 0} Frist abgelaufen · <a href="#/marinade">ansehen →</a></span></article>
       <article class="stat ${d.last_pest_check?.infestation ? 'bad' : ''}"><small>Schädlingskontrolle</small><b>${d.last_pest_check ? (d.last_pest_check.infestation ? 'Befall!' : 'ohne Befund') : '–'}</b><span>${d.last_pest_check ? fmtTime(d.last_pest_check.created_at) : 'noch keine'}</span></article>
       <article class="stat ${d.open_trainings.length ? 'bad' : ''}"><small>Offene Pflichtschulungen</small><b>${d.open_trainings.length}</b><span><a href="#/manage/training">ansehen →</a></span></article>
       <article class="stat ${d.timers_expired ? 'bad' : ''}"><small>Timer</small><b>${d.timers_running}</b><span>${d.timers_expired} abgelaufen, nicht entsorgt</span></article>
@@ -600,6 +637,31 @@ async function mDaily() {
       ${r.meat.lines.map((l) => `<tr><td>${esc(l.item)}</td><td>${l.start ?? '–'}</td><td>${l.incoming ?? '–'}</td><td><b>${l.usage ?? '–'}</b></td><td>${l.rest} ${esc(l.unit)}</td><td>${l.marinated ?? '–'}</td><td>${l.unusable ?? '–'}</td></tr>`).join('')}</tbody></table>
       <p class="note">Verbrauch = Anfangsbestand + Zugang (Wareneingang) − Restbestand − nicht verwendbare Ware.</p>` : ''}
     ${isManager() ? `<h2>Fristen</h2><form data-submit="daily-settings" class="inline card"><label>Frühschicht bis<input name="early" type="time" value="${esc(r.deadlines.early)}"></label><label>Spätschicht bis<input name="late" type="time" value="${esc(r.deadlines.late)}"></label><button class="small primary">Speichern</button></form>` : ''}`;
+}
+
+async function mRecipes(arg) {
+  const list = await get('/api/admin/marinades');
+  const r = arg === 'neu' ? null : list.find((x) => x.id === Number(arg));
+  if (arg) {
+    const ing = r?.ingredients || [];
+    return `<h1>${icon('prep')} ${r ? esc(r.name) + ' – neue Version' : 'Neue Rezeptur'}</h1>
+      <p class="note">Rezepturen werden nur in der Datenbank gespeichert, nicht im Code-Repository. Jede Änderung ist eine neue Version; bestehende Chargen behalten ihre Version.</p>
+      <form data-submit="recipe" ${r ? `data-id="${r.id}"` : ''} class="form">
+        ${r ? '' : '<label>Name<input name="name" required></label>'}
+        <h3>Zutaten je 1 kg Fleisch</h3>
+        ${[0, 1, 2, 3, 4, 5, 6, 7].map((k) => `<div class="grid3"><input name="in${k}" placeholder="Zutat ${k + 1}" value="${esc(ing[k]?.name || '')}" aria-label="Zutat ${k + 1}">
+          <input name="ip${k}" type="number" step="0.01" min="0" placeholder="Menge" value="${ing[k]?.per_kg ?? ''}" aria-label="Menge ${k + 1}">
+          <select name="iu${k}" aria-label="Einheit ${k + 1}">${['g', 'kg', 'ml', 'L', 'Stück'].map((u) => `<option ${(ing[k]?.unit || 'g') === u ? 'selected' : ''}>${u}</option>`).join('')}</select></div>`).join('')}
+        <label>Allergene (laut Allergenliste)<input name="allergens" value="${esc(r?.allergens || '')}"></label>
+        <div class="grid2"><label>Erlaubte Abweichung beim Abwiegen (%, leer = nur melden)<input name="tolerance_percent" type="number" step="0.5" min="0" max="50" value="${r?.tolerance_percent ?? ''}"></label>
+        <label>Verwendbar (Stunden, leer = keine Frist)<input name="use_within_hours" type="number" min="1" max="336" value="${r?.use_within_hours ?? ''}"></label>
+        <label>Quelle der Frist (Pflicht bei Frist)<input name="use_source" value="${esc(r?.use_source || '')}"></label></div>
+        <button class="primary">Speichern</button></form>`;
+  }
+  return `<h1>${icon('prep')} Rezepturen (Marinaden)</h1><p class="note">Nur der Betreiber sieht und ändert diese Seite.</p>
+    ${list.map((m) => `<section class="card"><h2>${esc(m.name)} <small>v${m.version}</small></h2><ul class="plain">${m.ingredients.map((i) => `<li>${esc(i.name)}: ${i.per_kg} ${esc(i.unit)} je kg</li>`).join('')}</ul>
+      <a class="secondary" href="#/manage/recipes/${m.id}">${icon('edit')} Neue Version</a></section>`).join('') || '<p>Noch keine Rezeptur.</p>'}
+    <a class="primary" href="#/manage/recipes/neu">${icon('add')} Neue Rezeptur</a>`;
 }
 
 async function mOnboarding() {
@@ -815,6 +877,7 @@ async function route() {
     case 'daily': return viewDaily(b);
     case 'pest': return viewPest();
     case 'handbook': return viewHandbook();
+    case 'marinade': return viewMarinade();
     case 'goods': return viewGoods();
     case 'oil': return viewOil();
     case 'problem': return viewProblem(b);
@@ -880,6 +943,8 @@ document.addEventListener('change', async (ev) => {
   try {
     if (C === 'lang') { setLang(el.value); return route(); }
     if (C === 'branch') { S.branch = Number(el.value); localStorage.setItem('fh_branch', S.branch); return route(); }
+    if (C === 'marinade-recipe') { marinadeSel.recipe = el.value; return route(); }
+    if (C === 'marinade-kg') { marinadeSel.kg = el.value; marinadeSel.meat = el.form?.meat_item_id?.value; lastBatch = null; return route(); }
     if (C === 'observe-station') { observeSel.station = el.value; return route(); }
     if (C === 'tpl-station') { await api('PATCH', `/api/templates/${el.dataset.id}`, { station_id: el.value || null }); S.flash = { type: 'ok', text: tr('saved') }; return route(); }
     if (C === 'sop-review') { await api('PATCH', `/api/admin/sops/${el.dataset.id}`, { safety_review: el.value }); S.flash = { type: 'ok', text: tr('saved') }; return route(); }
@@ -976,6 +1041,22 @@ document.addEventListener('submit', async (ev) => {
         S.flash = { type: r.infestation ? 'error' : 'ok', text: r.infestation ? 'Befall gemeldet – Leitung ist informiert. Bereich schützen, nichts selbst sprühen.' : 'Kontrolle gespeichert – kein Befall.' };
         break;
       }
+      case 'batch': {
+        const actuals = Object.keys(fd).filter((k) => /^a\d+$/.test(k)).sort((x, y) => Number(x.slice(1)) - Number(y.slice(1))).map((k) => fd[k]);
+        lastBatch = await post('/api/marinades/batches', { branch: S.branch, marinade_id: Number(fd.marinade_id), meat_item_id: Number(fd.meat_item_id), meat_kg: fd.meat_kg, actuals, note: fd.note });
+        marinadeSel.kg = ''; S.flash = { type: 'ok', text: `Charge ${lastBatch.batch_code} gespeichert` };
+        break;
+      }
+      case 'batch-rest':
+        if (submitter?.value === 'discard') await post(`/api/marinades/batches/${form.dataset.id}/discard`, { reason: fd.reason });
+        else await post(`/api/marinades/batches/${form.dataset.id}/rest`, { remaining_kg: fd.remaining_kg });
+        S.flash = { type: 'ok', text: tr('saved') }; break;
+      case 'recipe': {
+        const ingredients = [0, 1, 2, 3, 4, 5, 6, 7].map((k) => ({ name: fd['in' + k], per_kg: fd['ip' + k], unit: fd['iu' + k] })).filter((i) => i.name && i.name.trim());
+        const body = { name: fd.name, ingredients, allergens: fd.allergens, tolerance_percent: fd.tolerance_percent, use_within_hours: fd.use_within_hours, use_source: fd.use_source };
+        if (form.dataset.id) await api('PUT', `/api/admin/marinades/${form.dataset.id}`, body); else await post('/api/admin/marinades', body);
+        S.flash = { type: 'ok', text: 'Rezeptur gespeichert (neue Version)' }; break;
+      }
       case 'daily-settings': await api('PUT', '/api/daily/settings', { branch: S.branch, early: fd.early, late: fd.late }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'onboarding-trainer': {
         const areas = [...form.querySelectorAll('input[name=area]:checked')].map((x) => x.value);
@@ -1002,6 +1083,7 @@ document.addEventListener('submit', async (ev) => {
       case 'branch-new': await post('/api/admin/branches', fd); await loadMe(); S.flash = { type: 'ok', text: tr('saved') }; break;
     }
     if (location.hash === hashBefore) route(); // sonst rendert der hashchange-Handler
+    if (S.flash) window.scrollTo(0, 0); // Meldung oben sichtbar machen
   } catch (e) { showError(e); } finally { btns.forEach((b) => (b.disabled = false)); }
 });
 

@@ -34,6 +34,7 @@ Die Demo nutzt eine eigene In-Memory-Datenbank und einen temporären Foto-Ordner
 | Wareneingang | Kamera-Scanner (wo der Browser es unterstützt) oder Eingabe; erkennt EAN/GTIN mit Prüfziffer, GS1-Codes mit Charge/MHD, GS1 Digital Link, METRO-Artikelnummern aus dem Artikelstamm; unbekannte Codes → Zuordnung durch Leitung; Links nur nach Bestätigung und nur von erlaubten https-Domains; Menge, Charge, MHD, Temperatur (wo nötig), Zustand, Pflichtfoto, Annahme/Ablehnung |
 | Tagesinventur | Liste der Betreiber-Vorlage (16 Artikel), Frühschicht bis 17:00, Spätschicht bis 23:00 (je Filiale änderbar); jeder Mitarbeiter füllt digital aus, Abgabe nur vollständig; Fleisch mit „davon mariniert“ und „nicht verwendbar“; Leitung sieht je Tag wer, wann, rechtzeitig/verspätet/verpasst; Erinnerung 60 Min vor Frist und Meldung bei verpasster Frist; Fleisch-Auswertung Anfang – Zugang – Verbrauch – Rest |
 | Schädlingskontrolle | Hinweise für Mitarbeiter (worauf achten, Vorbeugung, Vorgehen bei Fund), Kontrolle aller 10 Bereiche, bei Befund Beschreibung + Foto Pflicht → automatisch Problem und Meldung an Leitung, Schädlingsbekämpfer ja/nein, Verlauf |
+| Marinaden-Protokoll | Feste, versionierte Rezeptur (nur Betreiber, nur in der Datenbank); App berechnet Zutatenmengen je kg Fleisch, Mitarbeiter trägt Abgewogenes ein, Zutaten nicht änderbar, Toleranz optional; Charge mit Etikett-Code, Datum, Mitarbeiter, Allergenen, Verwendungsfrist (nur mit Quelle); Fleisch wird im Bestand verbucht; Restmengen und Entsorgung mit Grund |
 | Mitarbeiter-Handbuch | 12 Kapitel der Betreiber-Vorlage in der App; Einarbeitungsbestätigung digital: Trainer trägt Bereiche ein, Mitarbeiter bestätigt selbst (keine Selbstbestätigung des Trainers) |
 | Wöchentliche Inventur | Inventur-Tag je Filiale, automatische Erinnerung (fällig/überfällig), alle zählen mit, Abschluss nur Schichtführer/Leitung und nur vollständig, Abweichungen werden gebucht, Verlauf |
 | Pflichtschulungen | 5 Schulungen (Hygiene, Fritteuse, Wareneingang, Reinigung, Allergene), Gültigkeit einstellbar, wöchentliche Erinnerung an offene/abgelaufene Schulungen |
@@ -48,8 +49,8 @@ Was noch fehlt, steht ehrlich in [docs/STATUS.md](docs/STATUS.md). Prüfbericht 
 ## Tests
 
 ```bash
-npm test     # 48 API- und Logiktests (node:test)
-npm run e2e  # 35 Browser-Abläufe in Chrome (Handy-Ansicht), erzeugt docs/screenshots/ und docs/E2E_RESULTS.md
+npm test     # 53 API- und Logiktests (node:test)
+npm run e2e  # 36 Browser-Abläufe in Chrome (Handy-Ansicht), erzeugt docs/screenshots/ und docs/E2E_RESULTS.md
 ```
 
 ## Echtbetrieb
@@ -59,7 +60,7 @@ Siehe [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) (STRATO VPS, HTTPS, sichere Admin
 ## Aufbau
 
 ```
-server/   index.js (Start) · app.js (API) · stations.js (Stationen, Plan, Timer) · inventory.js (Inventur, Erinnerungen) · daily.js (Tagesinventur, Schädlinge, Einarbeitung) · handbook.js · courses-extra.js · db.js (Schema/Migrationen) · auth.js · seed.js (Startvorlagen, Demo-Daten)
+server/   index.js (Start) · app.js (API) · stations.js (Stationen, Plan, Timer) · inventory.js (Inventur, Erinnerungen) · daily.js (Tagesinventur, Schädlinge, Einarbeitung) · marinades.js · handbook.js · courses-extra.js · db.js (Schema/Migrationen) · auth.js · seed.js (Startvorlagen, Demo-Daten)
 shared/   codes.js (Barcode-/QR-Erkennung, Server + Browser)
 public/   index.html · app.js · i18n.js · icons.js · style.css · sw.js · manifest
 scripts/  create-admin.js (erster Betreiber-Account)

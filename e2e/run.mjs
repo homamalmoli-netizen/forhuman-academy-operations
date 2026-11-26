@@ -439,6 +439,20 @@ try {
     await m.locator('td', { hasText: 'Demo Mitarbeiter A' }).first().waitFor();
     await shotFull(m, '39-tagesinventur-leitung');
   });
+
+  await step('Marinieren: feste Rezeptur, Mengen berechnet, Charge mit Etikett', async () => {
+    await p.click('a.tab[href="#/goods"]');
+    await p.click('a[href="#/marinade"]');
+    await p.locator('form[data-submit=batch]').waitFor();
+    await p.fill('input[name=meat_kg]', '4');
+    await p.press('input[name=meat_kg]', 'Tab');
+    await p.locator('td', { hasText: '200 g' }).waitFor();
+    await p.fill('input[name=a0]', '200'); await p.fill('input[name=a1]', '80'); await p.fill('input[name=a2]', '400');
+    await shotFull(p, '40-marinieren');
+    await p.click('form[data-submit=batch] button.primary');
+    await p.locator('.ok-card .label-card', { hasText: 'MAR-HAL-' }).waitFor();
+    await shot(p, '41-marinade-etikett');
+  });
   assert.deepEqual(p.errors.concat(sl.errors, tr2.errors), [], 'JavaScript-Fehler: ' + p.errors.concat(sl.errors, tr2.errors).join('; '));
 
   const a = await newPage();
@@ -448,6 +462,11 @@ try {
     await a.click('a[href="#/manage/sops"]');
     await a.locator('select[data-change=sop-review]').first().waitFor();
     await shotFull(a, '23-admin-sop');
+    await a.click('a[href="#/manage/recipes"]');
+    await a.locator('h2', { hasText: 'DEMO Marinade' }).waitFor();
+    await a.click('a[href="#/manage/recipes/neu"]');
+    await a.locator('form[data-submit=recipe]').waitFor();
+    await shotFull(a, '42-rezeptur-bearbeiten');
   });
 
   // --- Produktion: keine Demo, keine Umgehung ---
