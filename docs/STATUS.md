@@ -122,3 +122,27 @@ Stand dieses Pull Requests. „Umgesetzt“ heißt: programmiert **und** durch a
 ## Anleitungen je Bereich und Reinigungsmittel (Issue #20)
 - 13 Bereichsanleitungen als **gesperrte Entwürfe**: Fleisch annehmen/prüfen/lagern, Marinieren, Fritteuse, Öl/Filter, Pommes, Burger/Wraps, Verpackung, Ausgabe, Reinigung, Lager (FIFO/FEFO), Inventur/Kontrolllisten, Kühlgeräte/Temperaturen, Notfall/Problem. Für Mitarbeiter und die Hilfesuche sind sie erst nach Freigabe sichtbar, auch in der Demo. Fotos, Videos und filialspezifische Werte ergänzt der Betreiber.
 - Reinigungsmittel-Stamm mit Name, Hersteller, Produktlink, Artikelnummer, Anwendung, Dosierung, Einwirkzeit, Schutzausrüstung, Materialhinweisen, Sicherheitsdatenblatt und zugehöriger Anleitung. Die fachlichen Felder sind leer und nicht erfunden. Freigabe nur mit Anwendung, Dosierung, Einwirkzeit, Schutzausrüstung und Link zum Sicherheitsdatenblatt (auch in der Datenbank erzwungen). Jede Änderung setzt den Eintrag auf Entwurf zurück. Mitarbeiter sehen nur Freigegebenes (Mehr → Reinigungsmittel).
+
+## Fahrer & Fahrzeuge (Issue #20)
+- Fahrer sind normale Mitarbeiter mit Fahrer-Eintrag je Filiale. Fahrzeuge legt die Leitung an (Anzahl frei, Demo: 2 in Halle, 1 in Leuna – fiktiv).
+- Je Fahrzeug und Schicht (Früh/Spät): **Startkontrolle** (Licht, Reifen, Bremsen, Warnleuchten, Sitz/Spiegel, Schäden, Thermotaschen, Papiere) und **Endkontrolle mit Übergabe** (Innenraum, Müll, Thermotaschen, keine Speisen, Schlüssel, neue Schäden). Tank- und Innenraumfoto sind jeweils Pflicht.
+- Nur der Fahrer selbst gibt seine Kontrolle ab; die Endkontrolle nur, wer die Startkontrolle gemacht hat. Keine Bestätigung durch andere.
+- „Nein“ bei Licht, Reifen, Bremsen oder Warnleuchten **sperrt das Fahrzeug** und meldet es der Leitung als kritisch. Entsperren nur durch die Leitung mit Notiz zur Behebung.
+- Führerscheinkontrolle: gespeichert werden nur Klasse, Datum und prüfende Person – **keine Kopie, keine Nummer**. Nicht selbst prüfbar. Ein Prüfintervall legt der Betreiber fest (leer = kein Intervall); die App gibt keinen Wert vor.
+- Offen beim Betreiber: echte Fahrzeuge, wer Fahrer ist, gewünschtes Prüfintervall.
+
+## Offline-Entwürfe (Issue #20)
+- Kontrolllisten, Hygiene-Check und Fahrzeugkontrollen werden ohne Netz auf dem Gerät gespeichert (IndexedDB), inklusive Fotos. Ein gelber Balken zeigt „Nicht gesendet: n“.
+- **Ein Entwurf gilt nicht als erledigt.** Erst wenn der Server die Abgabe annimmt, verschwindet er. Pünktlichkeit zählt nach Eingang beim Server.
+- Lehnt der Server ab (z. B. Frist vorbei, schon abgeschlossen), bleibt der Entwurf mit Meldung sichtbar und muss neu erfasst oder verworfen werden.
+- Andere Aufgaben bleiben wie bisher: ohne Netz klare Fehlermeldung, nichts gespeichert.
+
+## Hilfe direkt bei der Aufgabe (Issue #20)
+- Jede Aufgabe hat einen Knopf „Hilfe“: Aufgabe und freigegebene Anleitung **Deutsch und Arabisch nebeneinander**, mit Vorlesen je Sprache. Nicht freigegebene Anleitungen werden nicht gezeigt.
+- Der Betreiber kann jedem Anleitungsschritt ein Foto geben (nur Arbeitsschritt, keine Personen). Diese Fotos sind filialübergreifend sichtbar.
+- Offen: echte Fotos und geprüfte arabische Übersetzungen der Anleitungen.
+
+## Akademie: Arbeitsschutz & Erste Hilfe, Allergene (Issue #20)
+- Zwei neue Bereiche mit je 3 Stufen (48 Fragen, DE/EN/AR). Quellen: DGUV Vorschrift 1 § 26, BGN ASI 0.90 und 9.30, BGN-Unterweisung Brandschutz, ASR A2.3, LMIV Anhang II. Keine erfundenen Zahlen.
+- Allergene der Marinaden als Auswahl der 14 Hauptallergene (LMIV Anhang II) in der Rezeptur; Mitarbeiter sehen sie unter „Mehr → Allergene“ (ohne Mengen).
+- Offen: vollständige Allergenliste aller Produkte, Standorte von Verbandkasten/Löschern/Sammelstelle, Ersthelfer je Schicht.

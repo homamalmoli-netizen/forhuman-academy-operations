@@ -5,7 +5,9 @@
 import { randomBytes, randomInt } from 'node:crypto';
 import { tx, audit } from './db.js';
 import { can } from './auth.js';
-import { AREAS, LEVELS } from './training-content.js';
+import { AREAS as BASE_AREAS, LEVELS } from './training-content.js';
+import { AREAS_EXTRA } from './training-content-6.js';
+const AREAS = [...BASE_AREAS, ...AREAS_EXTRA];
 import { MORE_QUESTIONS } from './training-content-2.js';
 import { LEVEL1_MORE } from './training-content-3.js';
 import { LEVEL2_MORE_A } from './training-content-4a.js';

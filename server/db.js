@@ -914,6 +914,55 @@ const MIGRATIONS = [
     CHECK (status <> 'approved' OR (dosage IS NOT NULL AND contact_time IS NOT NULL AND ppe IS NOT NULL AND application IS NOT NULL AND sds_url IS NOT NULL))
   );
   `,
+  // 17: Fahrer & Fahrzeuge – persönliche Fahrzeugkontrolle je Schicht, Sperre bei Sicherheitsmangel, dokumentierte Führerscheinkontrolle (ohne Kopie/Nummer).
+  `
+  CREATE TABLE vehicles (
+    id INTEGER PRIMARY KEY,
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    label TEXT NOT NULL,
+    plate TEXT,
+    active INTEGER NOT NULL DEFAULT 1,
+    blocked INTEGER NOT NULL DEFAULT 0,
+    blocked_reason TEXT,
+    blocked_at TEXT,
+    blocked_check_id INTEGER,
+    unblocked_by INTEGER REFERENCES users(id),
+    unblocked_at TEXT,
+    unblock_note TEXT
+  );
+  CREATE TABLE driver_profiles (
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    active INTEGER NOT NULL DEFAULT 1,
+    licence_class TEXT,
+    licence_checked_on TEXT,
+    licence_checked_by INTEGER REFERENCES users(id),
+    licence_note TEXT,
+    PRIMARY KEY (user_id, branch_id)
+  );
+  CREATE TABLE vehicle_checks (
+    id INTEGER PRIMARY KEY,
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    vehicle_id INTEGER NOT NULL REFERENCES vehicles(id),
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    work_date TEXT NOT NULL,
+    shift TEXT NOT NULL CHECK (shift IN ('early','late')),
+    kind TEXT NOT NULL CHECK (kind IN ('start','end')),
+    answers TEXT NOT NULL,
+    fuel_level TEXT,
+    fuel_media_id INTEGER REFERENCES media(id),
+    interior_media_id INTEGER REFERENCES media(id),
+    safety_defect INTEGER NOT NULL DEFAULT 0,
+    note TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    UNIQUE (vehicle_id, work_date, shift, kind)
+  );
+  CREATE INDEX idx_vehicle_checks_day ON vehicle_checks (branch_id, work_date);
+  `,
+  // 18: Strukturierte Allergenkennzeichnung der Marinaden-Rezeptur (14 Hauptallergene nach LMIV Anhang II)
+  `
+  ALTER TABLE marinade_versions ADD COLUMN allergen_codes TEXT;
+  `,
 ];
 
 export function openDb(file = ':memory:') {

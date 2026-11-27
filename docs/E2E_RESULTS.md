@@ -1,11 +1,11 @@
 # End-to-End-Ergebnis
 
-Ausgeführt: 2026-11-27T02:21:48.057Z · Chrome · Handy-Ansicht 390×844
+Ausgeführt: 2026-11-27T05:18:07.746Z · Chrome · Handy-Ansicht 390×844
 
 - ✅ Startseite: Sprache wählen und Demo ohne Login
 - ✅ Öffnung: eine Aufgabe pro Bildschirm, Erledigt
 - ✅ Pflichtfoto: ohne Foto abgelehnt, mit Foto gespeichert
-- ✅ Anleitung öffnen (feste, freigegebene Hilfe statt Chatbot)
+- ✅ Hilfe/Anleitung öffnen (feste, freigegebene Anleitung statt Chatbot, DE + AR)
 - ✅ Messwert Kühlschrank mit Foto
 - ✅ Problem melden mit Foto
 - ✅ Sprachwechsel Arabisch: RTL und übersetzte Aufgabe
@@ -41,7 +41,7 @@ Ausgeführt: 2026-11-27T02:21:48.057Z · Chrome · Handy-Ansicht 390×844
 - ✅ Persönliche Aufgaben: Schichtführer teilt ein, Mitarbeiter sieht nur seine Aufgaben
 - ✅ Öl: tägliche Prüfung „nicht zulässig“ sperrt Fritteuse, Wechsel hebt Sperre auf
 - ✅ Wochenbericht je Filiale
-- ✅ Schulungsbereiche: 10 Bereiche × 3 Stufen, Stufe 2 gesperrt
+- ✅ Schulungsbereiche: 12 Bereiche × 3 Stufen (inkl. Arbeitsschutz und Allergene), Stufe 2 gesperrt
 - ✅ Schulung: Lernschritte, Prüfung mit gemischten Fragen, Ergebnis mit Erklärungen
 - ✅ Hilfe „Wie mache ich das?“ – Suche in Schulung, Handbuch, Anleitungen
 - ✅ Kontrollliste: Mitarbeiter trägt Ist-Mengen ein (0 gültig) und schließt ab
@@ -53,7 +53,12 @@ Ausgeführt: 2026-11-27T02:21:48.057Z · Chrome · Handy-Ansicht 390×844
 - ✅ Betreiber: Reinigungsmittel-Stamm – Entwürfe ohne erfundene Dosierung, Freigabe erst mit Sicherheitsdatenblatt
 - ✅ Leitung: Kontrolllisten – Tagesübersicht, Unterbestand, Mindestwerte, Intervalle
 - ✅ Betreiber: Schulungsbereiche – Übersicht, Fragenpool, Inhalte und Fragen bearbeiten
+- ✅ Fahrer: Startkontrolle mit Tank- und Innenraumfoto
+- ✅ Offline: Endkontrolle wird als Entwurf gespeichert (nicht erledigt) und bei Netz gesendet
+- ✅ Fahrer: Sicherheitsmangel sperrt das Fahrzeug
+- ✅ Leitung: Fahrer & Fahrzeuge – Kontrollen, Sperre aufheben, Führerscheinkontrolle
+- ✅ Hilfe direkt bei der Aufgabe: Deutsch und Arabisch nebeneinander
 - ✅ Produktion: nur Anmeldung, keine Demo-Buttons, keine Standardkonten
 - ✅ Offline: keine falsche Erfolgsmeldung
 
-**53 von 53 bestanden.** Screenshots: `docs/screenshots/`
+**58 von 58 bestanden.** Screenshots: `docs/screenshots/`

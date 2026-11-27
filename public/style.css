@@ -354,3 +354,25 @@ fieldset.yn legend { display: block; width: 100%; padding: 0 0 6px; font-weight:
 .facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 10px 0; }
 .facts dt { font-weight: 700; }
 .facts dd { margin: 0; }
+
+/* --- Fahrer, Offline-Entwürfe, Hilfe, Allergene (Issue #20) --- */
+.sync-banner { display: flex; align-items: center; gap: 8px; margin: 0; padding: 10px 16px; background: #fff4e0; color: var(--warn); font-weight: 800; text-decoration: none; border-bottom: 2px solid var(--warn); }
+.sync-banner.bad { background: #fde8e9; color: var(--bad); border-color: var(--bad); }
+.draft-list .draft { display: grid; gap: 6px; }
+.draft-list .draft.rejected { border-color: var(--bad); }
+.vehicle { display: grid; gap: 10px; }
+.vehicle.blocked { border: 2px solid var(--bad); background: #fff7f7; }
+.vehicle .ctl-name { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.help-grid { display: grid; gap: 12px; }
+@media (min-width: 720px) { .help-grid { grid-template-columns: 1fr 1fr; } }
+.help-col { position: relative; }
+.help-col .lang-tag { display: inline-block; font-weight: 800; color: var(--warn); margin-bottom: 4px; }
+.step-photo { display: block; width: 100%; max-width: 420px; margin-top: 8px; border-radius: 12px; border: 2px solid var(--line); }
+.steps li { flex-wrap: wrap; }
+.alg-chips { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 6px 0; }
+.alg-chip { border-radius: 999px; padding: 6px 12px; background: #fff4e0; border: 1px solid var(--warn); color: #6b3f00; font-weight: 700; }
+.alg-chip.muted { background: #f2efe9; border-color: var(--line); color: #444; font-weight: 600; }
+.allergen-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; border: 1px solid var(--line); border-radius: 12px; padding: 10px; }
+.sop-photo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.linklike { background: none; border: 0; padding: 0; cursor: pointer; font: inherit; }
+.thumbs a { font-weight: 700; }

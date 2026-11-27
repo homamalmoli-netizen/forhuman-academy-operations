@@ -21,6 +21,7 @@ import { registerControls, seedControls } from './controls.js';
 import { registerStock } from './stock.js';
 import { registerReadiness, workGate } from './readiness.js';
 import { registerGuides } from './guides.js';
+import { registerDrivers } from './drivers.js';
 
 export const LANGS = ['de', 'ar', 'en', 'tr'];
 const SHIFTS = ['open', 'run', 'close'];
@@ -209,7 +210,7 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
   if (demo) {
     const personas = {
       admin: 'demo.admin', manager_halle: 'demo.leitung.halle', manager_leuna: 'demo.leitung.leuna', trainer: 'demo.trainer',
-      employee_halle: 'demo.mitarbeiter.halle', employee_leuna: 'demo.mitarbeiter.leuna', shift_lead_halle: 'demo.schichtfuehrer.halle',
+      employee_halle: 'demo.mitarbeiter.halle', employee_leuna: 'demo.mitarbeiter.leuna', shift_lead_halle: 'demo.schichtfuehrer.halle', driver_halle: 'demo.fahrer.halle',
     };
     route('POST', '/api/demo/session', (ctx) => {
       const username = personas[ctx.body.persona];
@@ -252,7 +253,8 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
     const u = needUser(ctx);
     const branchId = needBranch(ctx, ctx.query.get('branch'));
     const purpose = ctx.query.get('purpose') || 'evidence';
-    if (!['evidence', 'problem', 'goods', 'oil', 'receipt', 'certificate', 'product'].includes(purpose)) throw bad('purpose');
+    if (!['evidence', 'problem', 'goods', 'oil', 'receipt', 'certificate', 'product', 'sop'].includes(purpose)) throw bad('purpose');
+    if (purpose === 'sop' && !u.is_admin) throw forbidden(); // Anleitungsfotos pflegt nur der Betreiber
     const buf = await readBody(ctx.req, 8 * 1024 * 1024);
     const mime = sniffMime(buf);
     if (!mime || (mime === 'application/pdf' && !['receipt', 'certificate'].includes(purpose))) throw bad('file_type', 'Nur JPG, PNG oder WEBP (Beleg/Nachweis auch PDF)');
@@ -267,7 +269,8 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
     needUser(ctx);
     const m = db.prepare('SELECT * FROM media WHERE id = ?').get(Number(ctx.params.id));
     if (!m || m.purged_at) throw notFound();
-    needBranch(ctx, m.branch_id);
+    // Anleitungsfotos (SOP) sind filialübergreifend sichtbar – nur Arbeitsschritte, keine Personen
+    if (m.purpose !== 'sop') needBranch(ctx, m.branch_id);
     // Persönliche Nachweise: nur die Person selbst und die Leitung der Filiale
     if (m.purpose === 'certificate' && m.uploaded_by !== ctx.user.id && !can(ctx.user, m.branch_id, 'manager', 'admin')) throw forbidden();
     const file = join(uploadDir, m.storage_key);
@@ -341,6 +344,27 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
     if (!row) throw notFound();
     needBranch(ctx, row.branch_id);
     return taskView(db, row, lang(ctx), u);
+  });
+
+  // Hilfe direkt bei der Aufgabe: Text der Aufgabe und freigegebene Anleitung auf Deutsch und Arabisch (mit Fotos).
+  route('GET', '/api/tasks/:id/help', (ctx) => {
+    needUser(ctx);
+    const row = db.prepare(`${OCC_SELECT} WHERE o.id = ?`).get(Number(ctx.params.id));
+    if (!row) throw notFound();
+    needBranch(ctx, row.branch_id);
+    const title = j(row.title), hint = j(row.hint);
+    const out = { task: { de: { title: title.de, hint: hint.de || null }, ar: { title: title.ar || null, hint: hint.ar || null } }, sop: null };
+    if (row.sop_id) {
+      const sop = db.prepare('SELECT * FROM sops WHERE id = ?').get(row.sop_id);
+      const v = db.prepare("SELECT * FROM sop_versions WHERE sop_id = ? AND status = 'approved' ORDER BY version_no DESC LIMIT 1").get(row.sop_id);
+      if (v) {
+        const c = j(v.content);
+        const reviewed = v.reviewed_langs.split(',');
+        out.sop = { id: sop.id, code: sop.code, version: v.version_no, safety_review: sop.safety_review,
+          de: c.de || null, ar: c.ar || null, ar_reviewed: reviewed.includes('ar') };
+      } else out.sop = { id: sop.id, code: sop.code, published: false };
+    }
+    return out;
   });
 
   route('POST', '/api/tasks/:id/complete', (ctx) => {
@@ -945,7 +969,15 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
     for (const l of LANGS) {
       if (!content[l]?.title) continue;
       clean[l] = { title: String(content[l].title).slice(0, 120), steps: (content[l].steps || []).filter((s) => String(s.text || '').trim()).slice(0, 20)
-        .map((s) => ({ icon: String(s.icon || 'check').slice(0, 20), text: String(s.text).slice(0, 400) })) };
+        .map((s) => {
+          const step = { icon: String(s.icon || 'check').slice(0, 20), text: String(s.text).slice(0, 400) };
+          if (s.media_id != null && s.media_id !== '') {
+            const m = db.prepare("SELECT id FROM media WHERE id = ? AND purpose = 'sop' AND purged_at IS NULL").get(Number(s.media_id));
+            if (!m) throw bad('media', 'Foto für Anleitung ungültig (nur Anleitungsfotos)');
+            step.media_id = m.id;
+          }
+          return step;
+        }) };
     }
     const reviewed = (Array.isArray(ctx.body.reviewed_langs) ? ctx.body.reviewed_langs : ['de']).filter((l) => clean[l]);
     const no = (db.prepare('SELECT MAX(version_no) m FROM sop_versions WHERE sop_id = ?').get(sop.id).m || 0) + 1;
@@ -1002,6 +1034,7 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
   registerStock({ route, db, needUser, needBranch, HttpError, bad, notFound, notify: ctlNotify, SEC_HEADERS });
   registerReadiness({ route, db, needUser, needBranch, HttpError, bad, notFound, notify: ctlNotify });
   registerGuides({ route, db, needUser, needBranch, needAdmin, HttpError, bad, notFound });
+  registerDrivers({ route, db, needUser, needBranch, HttpError, bad, notFound, notify: ctlNotify, mediaInBranch, can });
   route('PATCH', '/api/courses/:id', (ctx) => {
     const a = needAdmin(ctx);
     const c = db.prepare('SELECT * FROM courses WHERE id = ?').get(Number(ctx.params.id));

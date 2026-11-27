@@ -81,9 +81,10 @@ try {
     await p.locator('.task-title', { hasText: 'Hände waschen' }).waitFor();
   });
 
-  await step('Anleitung öffnen (feste, freigegebene Hilfe statt Chatbot)', async () => {
-    await p.click('a.act[href^="#/sop/"]');
-    await p.locator('.sop h1', { hasText: 'Hände waschen' }).waitFor();
+  await step('Hilfe/Anleitung öffnen (feste, freigegebene Anleitung statt Chatbot, DE + AR)', async () => {
+    await p.click('a.act[href^="#/taskhelp/"]');
+    await p.locator('.help-col[lang=de] h3', { hasText: 'Hände waschen' }).waitFor();
+    await p.locator('.help-col[lang=ar] h3').waitFor();
     await shot(p, '04-anleitung');
     await p.goBack();
     await p.click('.done-btn');
@@ -542,10 +543,10 @@ try {
     await shotFull(sl, '47-wochenbericht');
   });
 
-  await step('Schulungsbereiche: 10 Bereiche × 3 Stufen, Stufe 2 gesperrt', async () => {
+  await step('Schulungsbereiche: 12 Bereiche × 3 Stufen (inkl. Arbeitsschutz und Allergene), Stufe 2 gesperrt', async () => {
     await nav(p, '#/train');
     await p.locator('.area').first().waitFor();
-    assert.equal(await p.locator('.area').count(), 10);
+    assert.equal(await p.locator('.area').count(), 12);
     assert.equal(await p.locator('.area').first().locator('.level-pill').count(), 3);
     await shotFull(p, '51-schulungsbereiche');
   });
@@ -686,6 +687,91 @@ try {
     await a.locator('a[href^="#/manage/academy/"]').nth(1).click();
     await a.locator('form[data-submit=train-module]').waitFor();
     await shotFull(a, '56-schulung-bearbeiten');
+  });
+
+
+  // --- Fahrer, Offline-Entwürfe, Hilfe, Allergene ---
+  const dv = await newPage();
+  const fillCheck = async (pg) => {
+    for (const f of await pg.locator('form[data-submit=vehicle] fieldset').all()) await f.locator('input[value=yes]').check();
+    await pg.selectOption('select[name=fuel_level]', '3_4');
+    await pg.setInputFiles('input[data-purpose=fuel]', photoPath);
+    await pg.locator('.photo-field.ready').first().waitFor();
+    await pg.setInputFiles('input[data-purpose=interior]', photoPath);
+    await pg.locator('.photo-field.ready').nth(1).waitFor();
+  };
+  await step('Fahrer: Startkontrolle mit Tank- und Innenraumfoto', async () => {
+    await dv.goto(D + '/');
+    await dv.click('[data-persona=driver_halle]');
+    await dv.locator('header.top').waitFor();
+    await nav(dv, '#/drive');
+    await dv.locator('section.vehicle').first().waitFor();
+    await shotFull(dv, '68-fahrer-fahrzeuge');
+    await dv.locator('section.vehicle').first().locator('a', { hasText: 'Startkontrolle' }).click();
+    await dv.locator('form[data-submit=vehicle]').waitFor();
+    await fillCheck(dv);
+    await shotFull(dv, '69-fahrer-startkontrolle');
+    await dv.click('form[data-submit=vehicle] button.primary');
+    await dv.locator('.flash.ok').waitFor();
+    await dv.locator('section.vehicle').first().locator('a', { hasText: 'Endkontrolle' }).waitFor();
+  });
+
+  await step('Offline: Endkontrolle wird als Entwurf gespeichert (nicht erledigt) und bei Netz gesendet', async () => {
+    await dv.locator('section.vehicle').first().locator('a', { hasText: 'Endkontrolle' }).click();
+    await dv.locator('form[data-submit=vehicle]').waitFor();
+    await dv.context().setOffline(true);
+    await fillCheck(dv);
+    await dv.locator('.photo-field.ready', { hasText: 'noch nicht gesendet' }).first().waitFor();
+    await dv.click('form[data-submit=vehicle] button.primary');
+    await dv.locator('.flash.warn', { hasText: 'NICHT erledigt' }).waitFor();
+    await dv.locator('.sync-banner').waitFor();
+    assert.equal(await dv.locator('.draft.pending').count(), 1);
+    await shotFull(dv, '70-offline-entwurf');
+    await dv.context().setOffline(false);
+    await dv.locator('.flash.ok', { hasText: 'Gesendet' }).waitFor();
+    assert.equal(await dv.locator('.sync-banner').count(), 0);
+    await nav(dv, '#/drive');
+    await dv.locator('section.vehicle').first().locator('.badge.ok').waitFor();
+  });
+
+  await step('Fahrer: Sicherheitsmangel sperrt das Fahrzeug', async () => {
+    await dv.locator('section.vehicle').nth(1).locator('a', { hasText: 'Startkontrolle' }).click();
+    await dv.locator('form[data-submit=vehicle]').waitFor();
+    await fillCheck(dv);
+    await dv.locator('fieldset', { hasText: 'Bremsen' }).locator('input[value=no]').check();
+    await dv.fill('textarea[name=note]', 'Bremse quietscht stark (fiktiv)');
+    await dv.click('form[data-submit=vehicle] button.primary');
+    await dv.locator('.flash.error', { hasText: 'gesperrt' }).waitFor();
+    await dv.locator('section.vehicle.blocked').waitFor();
+    await shotFull(dv, '71-fahrzeug-gesperrt');
+  });
+
+  await step('Leitung: Fahrer & Fahrzeuge – Kontrollen, Sperre aufheben, Führerscheinkontrolle', async () => {
+    const mg = await newPage();
+    await mg.goto(D + '/');
+    await mg.click('[data-persona=manager_halle]');
+    await mg.locator('header.top').waitFor();
+    await nav(mg, '#/manage/drivers');
+    await mg.locator('form[data-submit=vehicle-unblock]').waitFor();
+    await shotFull(mg, '72-leitung-fahrer');
+    await mg.fill('form[data-submit=vehicle-unblock] input[name=note]', 'Werkstatt hat Bremse geprüft (fiktiv)');
+    await mg.click('form[data-submit=vehicle-unblock] button');
+    await mg.locator('.flash.ok').waitFor();
+    assert.equal(await mg.locator('form[data-submit=vehicle-unblock]').count(), 0);
+  });
+
+  await step('Hilfe direkt bei der Aufgabe: Deutsch und Arabisch nebeneinander', async () => {
+    const hp = await newPage();
+    await hp.goto(D + '/');
+    await hp.click('[data-persona=employee_leuna]');
+    await hp.locator('.task-title').waitFor();
+    await hp.locator('a.act', { hasText: 'Hilfe' }).click();
+    await hp.locator('.help-col[lang=ar]').waitFor();
+    assert.match(await hp.locator('.help-col[lang=ar] h2').innerText(), /[؀-ۿ]/);
+    await shotFull(hp, '73-hilfe-de-ar');
+    await nav(hp, '#/allergens');
+    await hp.locator('.alg-chips').first().waitFor();
+    await shotFull(hp, '74-allergene');
   });
 
   // --- Produktion: keine Demo, keine Umgehung ---
