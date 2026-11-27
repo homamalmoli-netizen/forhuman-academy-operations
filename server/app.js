@@ -19,6 +19,7 @@ import { registerAccounts, certStatus } from './accounts.js';
 import { registerTraining } from './training.js';
 import { registerControls, seedControls } from './controls.js';
 import { registerStock } from './stock.js';
+import { registerReadiness, workGate } from './readiness.js';
 
 export const LANGS = ['de', 'ar', 'en', 'tr'];
 const SHIFTS = ['open', 'run', 'close'];
@@ -287,6 +288,9 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
     const shift = ctx.query.get('shift');
     if (!SHIFTS.includes(shift)) throw bad('shift');
     const date = berlinDate();
+    // Serverseitige Sperre: ohne Freigabe bzw. Hygiene-Check keine regulären Aufgaben (Lernbereiche bleiben offen)
+    const gate = workGate(db, u.id, branchId, shift, date);
+    if (!gate.ok) return { locked: true, gate, next: null, tasks: [], personal: [], team_open: [] };
     generateTasks(db, branchId, date);
     runReminders(db, branchId, date);
     const dist = autoAssign(db, branchId, date, shift, notify);
@@ -344,6 +348,7 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
     if (!row) throw notFound();
     const branchId = needBranch(ctx, row.branch_id);
     if (!['open', 'rework'].includes(row.status)) throw new HttpError(409, 'not_open', 'Aufgabe ist nicht offen');
+    { const g = workGate(db, u.id, branchId, row.shift); if (!g.ok) throw new HttpError(403, g.reason, g.message); }
     if (row.required_course_id && !qualification(db, u.id, row.required_course_id, branchId).ok) throw new HttpError(403, 'not_qualified', 'Schulung oder praktische Freigabe fehlt');
     if (!stationAccess(db, u, row.station_id, branchId)) throw new HttpError(403, 'not_certified', 'Für diese Station nicht freigegeben');
     if (row.role === 'shift_lead' && !can(u, branchId, 'shift_lead', 'manager', 'admin')) throw new HttpError(403, 'shift_lead_only', 'Diese Aufgabe ist für Schichtführer');
@@ -994,6 +999,7 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
   registerTraining({ route, db, needUser, needBranch, needAdmin, HttpError, bad, notFound });
   const { notify: ctlNotify } = registerControls({ route, db, needUser, needBranch, HttpError, bad, notFound, can, mediaInBranch });
   registerStock({ route, db, needUser, needBranch, HttpError, bad, notFound, notify: ctlNotify, SEC_HEADERS });
+  registerReadiness({ route, db, needUser, needBranch, HttpError, bad, notFound, notify: ctlNotify });
   route('PATCH', '/api/courses/:id', (ctx) => {
     const a = needAdmin(ctx);
     const c = db.prepare('SELECT * FROM courses WHERE id = ?').get(Number(ctx.params.id));

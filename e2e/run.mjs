@@ -647,6 +647,26 @@ try {
     await nav(a, '#/manage/dashboard');
   });
 
+  await step('Einarbeitung & Hygiene: Leitung schaltet Hygiene-Check ein, Mitarbeiter füllt ihn vor Schichtbeginn aus', async () => {
+    await nav(a, '#/manage/readiness');
+    await a.locator('form[data-submit=readiness-settings]').waitFor();
+    await a.check('form[data-submit=readiness-settings] input[name=gate_hygiene]');
+    await a.click('form[data-submit=readiness-settings] button');
+    await a.locator('.flash.ok').waitFor();
+    await shotFull(a, '65-einarbeitung-hygiene-leitung');
+    const e = await newPage();
+    await e.goto(D + '/');
+    await e.click('[data-persona=employee_halle]');
+    await e.locator('form[data-submit=hygiene]').waitFor();
+    await shotFull(e, '66-hygiene-check');
+    for (const f of await e.locator('form[data-submit=hygiene] fieldset').all()) await f.locator('input[value=yes]').check();
+    await e.click('form[data-submit=hygiene] button.primary');
+    await e.locator('form[data-submit=hygiene]').waitFor({ state: 'detached' });
+    await a.uncheck('form[data-submit=readiness-settings] input[name=gate_hygiene]');
+    await a.click('form[data-submit=readiness-settings] button');
+    await a.locator('.flash.ok').waitFor();
+  });
+
   await step('Leitung: Kontrolllisten – Tagesübersicht, Unterbestand, Mindestwerte, Intervalle', async () => {
     await a.click('a[href="#/manage/controls"]');
     await a.locator('h2', { hasText: 'Unter Mindestbestand' }).waitFor();

@@ -6,6 +6,7 @@
 import { tx, audit } from './db.js';
 import { berlinDate } from './app.js';
 import { evaluateStock, escalateZeroAlerts } from './stock.js';
+import { workGate, purgeHygiene } from './readiness.js';
 
 // Artikel aus den Betreiberlisten und Produktfotos (Issue #20). min: null = Mindestwert offen (nicht erfunden).
 // unit 'offen' = Einheit noch zu klären. o: { sup: Lieferant, crit: zeitkritisch, urgent: zusätzliche dringende Schwelle,
@@ -184,6 +185,7 @@ export function runControlReminders(db, branchId, now = new Date(), notify) {
     sent += notify(db, branchId, 'control', msg, ref, s.to === 'staff' ? r.assigned_to : null, s.to) ? 1 : 0;
   }
   sent += escalateZeroAlerts(db, branchId, now, notify);
+  purgeHygiene(db, now);
   return sent;
 }
 
@@ -236,6 +238,7 @@ export function registerControls({ route, db, needUser, needBranch, HttpError, b
     const r = runRow(ctx.params.id); if (!r) throw notFound();
     const branchId = needBranch(ctx, r.branch_id);
     if (!['open', 'rework'].includes(r.status)) throw new HttpError(409, 'not_open', 'Diese Kontrolle ist bereits abgeschlossen');
+    { const g = workGate(db, u.id, branchId); if (!g.ok) throw new HttpError(403, g.reason, g.message); }
     const lead = can(u, branchId, 'shift_lead', 'manager', 'admin');
     if (r.assigned_to && r.assigned_to !== u.id && !lead) throw new HttpError(403, 'assigned_other', 'Diese Kontrolle ist einer anderen Person zugewiesen');
     if (r.role === 'shift_lead' && !lead) throw new HttpError(403, 'shift_lead_only', 'Diese Kontrolle ist für Schichtführer');

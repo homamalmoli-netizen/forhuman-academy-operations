@@ -102,3 +102,19 @@ Stand dieses Pull Requests. „Umgesetzt“ heißt: programmiert **und** durch a
 - Deduplizierung: Dieselbe Kontrolle ohne Verschlechterung meldet nicht erneut; eine Verschlechterung oder eine neue Kontrollperiode meldet neu; ausreichender Bestand löst den Alarm auf.
 - Zusatzkontrolle jederzeit für jede Liste, sofort ausgewertet.
 - Nachbestellliste je Lieferant (METRO zuerst): Vorschlag = Zielbestand (sonst Minimum) − Ist − bereits bestellt. **Keine Preise, keine automatische Bestellung.** Die Leitung erfasst eine Bestellung (Menge, Lieferant, erwartetes Datum). Bei der Lieferung tragen Mitarbeiter die erhaltene Menge und den aktuellen Bestand ein (Pflicht, 0 gültig); Teillieferungen bleiben offen. Eine Bestellung allein schließt keinen Alarm. Export als CSV.
+
+## Einarbeitungs-Freigabe und Hygiene-Check (Issue #20)
+- Serverseitige Sperre: Ohne Freigabe durch die Leitung gibt es keine regulären Aufgaben; Abschließen, Starten und Kontrolllisten werden abgelehnt. Lernen, Handbuch und Nachweise bleiben offen. Leitung, Trainer und Betreiber sind ausgenommen.
+- Voraussetzungen (blockierend):
+  - Belehrung nach §43 IfSG bestätigt; bei Aufnahme der Tätigkeit höchstens 3 Monate alt, sonst nur mit Notiz „früher rechtzeitig aufgenommen“
+  - Arbeitgeberbelehrung nach §43 Abs. 4 IfSG innerhalb von 2 Jahren
+  - Einweisung und Handbuch bestätigt
+  - Pflichtschulungen bestanden
+- Hygieneschulung der letzten 12 Monate: ForHuman-Standard, nur Hinweis, nicht blockierend.
+- Freigabe nur durch die Leitung, nie durch die Person selbst; Entzug nur mit Grund.
+- Täglicher Hygiene-Check vor jeder Schicht: 12 betriebliche Punkte, jeweils Ja oder Nein ohne Vorauswahl, keine medizinischen Fragen, kein Freitext.
+  - Bei „Nein“ prüft die Leitung vertraulich; die Meldung enthält nur den Namen, keine Details.
+  - „Mögliches Tätigkeitsverbot“ kann die Leitung nicht übersteuern, nur „heute nicht mit Lebensmitteln“.
+  - Die Antworten werden nach der Aufbewahrungsfrist gelöscht (Standard 30 Tage).
+- Beide Sperren sind im Echtbetrieb standardmäßig an und unter **Leitung → Einarbeitung & Hygiene** schaltbar. In der Demo sind die fiktiven Mitarbeiter freigegeben und der Hygiene-Check ist aus.
+- Kein Rechtsrat: Fristen und Formulierungen bitte mit Fachberatung bzw. Gesundheitsamt bestätigen.

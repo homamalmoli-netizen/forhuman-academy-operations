@@ -511,4 +511,11 @@ export function seedDemo(db) {
   db.prepare(`INSERT INTO marinade_versions (marinade_id, version, ingredients, allergens, tolerance_percent, use_within_hours, use_source, created_by)
     VALUES (?, 1, ?, 'DEMO: Allergene laut Allergenliste der Filiale', 5, 24, 'DEMO-Wert (fiktiv) – nicht für den Betrieb', (SELECT id FROM users WHERE username = 'demo.admin'))`)
     .run(mid, JSON.stringify([{ name: 'DEMO Zutat A', per_kg: 50, unit: 'g' }, { name: 'DEMO Zutat B', per_kg: 20, unit: 'g' }, { name: 'DEMO Flüssigkeit C', per_kg: 100, unit: 'ml' }]));
+  // Demo: fiktive Mitarbeiter gelten als eingearbeitet und freigegeben; der tägliche Hygiene-Check ist in der Demo aus
+  // (im Echtbetrieb sind beide Sperren standardmäßig an und unter Leitung → Einarbeitung & Hygiene schaltbar).
+  const demoAdmin = db.prepare("SELECT id FROM users WHERE username = 'demo.admin'").get().id;
+  for (const m of db.prepare("SELECT DISTINCT user_id, branch_id FROM memberships WHERE role IN ('employee','shift_lead')").all())
+    db.prepare("INSERT OR IGNORE INTO work_releases (user_id, branch_id, released_by, note) VALUES (?,?,?, 'DEMO')").run(m.user_id, m.branch_id, demoAdmin);
+  for (const b of db.prepare('SELECT id FROM branches').all())
+    db.prepare("INSERT OR REPLACE INTO branch_settings (branch_id, key, value) VALUES (?, 'gate_hygiene', '0')").run(b.id);
 }

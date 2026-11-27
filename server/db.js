@@ -864,6 +864,35 @@ const MIGRATIONS = [
     note TEXT
   );
   `,
+  // 15: Einarbeitungs-Freigabe und täglicher Hygiene-Check (Antworten werden nach Aufbewahrungsfrist gelöscht).
+  `
+  CREATE TABLE work_releases (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    released_by INTEGER NOT NULL REFERENCES users(id),
+    released_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    prior_activity INTEGER NOT NULL DEFAULT 0,
+    note TEXT,
+    revoked_at TEXT,
+    UNIQUE (user_id, branch_id),
+    CHECK (user_id <> released_by)
+  );
+  CREATE TABLE hygiene_checks (
+    id INTEGER PRIMARY KEY,
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    work_date TEXT NOT NULL,
+    shift TEXT NOT NULL CHECK (shift IN ('open','run','close')),
+    answers TEXT,                              -- JSON Ja/Nein; nach Aufbewahrungsfrist NULL
+    all_ok INTEGER NOT NULL,
+    review_status TEXT NOT NULL DEFAULT 'none' CHECK (review_status IN ('none','pending','cleared','blocked')),
+    reviewed_by INTEGER REFERENCES users(id),
+    reviewed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    UNIQUE (branch_id, user_id, work_date, shift)
+  );
+  `,
 ];
 
 export function openDb(file = ':memory:') {

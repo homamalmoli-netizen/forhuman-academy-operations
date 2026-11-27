@@ -173,6 +173,7 @@ async function viewShift() {
   let d;
   try { d = await get(`/api/shift/next?${qs({ branch: S.branch, shift: S.shift, lang: S.lang })}`); }
   catch (e) { return render(__seq, `<div class="segs">${shiftBtns}</div>${errorBox(e)}`); }
+  if (d.locked) return render(__seq, `<div class="segs">${shiftBtns}</div>${await lockedCard(d.gate)}`);
   const pct = d.total ? Math.round((d.done / d.total) * 100) : 0;
   const mine = await get(`/api/my-stations?${qs({ branch: S.branch, shift: S.shift, lang: S.lang })}`).catch(() => []);
   const stationHead = mine.length
@@ -203,6 +204,27 @@ async function viewShift() {
       ${ctlOpen.map((r) => `<a class="ctl-row ${r.state}" href="#/control/${r.id}">${icon(r.marinated ? 'prep' : 'box')} <b>${esc(r.list)}</b>
         <span>${esc(tr('control_due'))} ${esc(r.due_time)}</span><span class="badge ${r.state === 'overdue' || r.state === 'rework' ? 'change' : 'warn'}">${esc(tr('ctl_' + r.state))}</span></a>`).join('')}</section>` : '';
   render(__seq, `<div class="segs">${shiftBtns}</div>${presence}${controls}${progress}${trainings}${body}${blocked}`);
+}
+
+// --- Sperre: Einarbeitung / Hygiene-Check ---------------------------------------------------
+async function lockedCard(gate) {
+  if (gate.reason === 'not_released') {
+    const r = await get(`/api/readiness/me?branch=${S.branch}`);
+    const link = { ifsg43: '#/welcome', employer_instruction: '#/welcome', onboarding: '#/handbook', trainings: '#/learn', annual_hygiene: '#/welcome' };
+    return `<section class="card lock-card"><h1>${icon('lock')} ${esc(tr('locked_title'))}</h1><p>${esc(tr('locked_intro'))}</p>
+      <ul class="plain">${r.items.map((i) => `<li class="ready-item ${i.ok ? 'ok' : ''}">${icon(i.ok ? 'check' : 'warn')} <a href="${link[i.key]}">${esc(i.label)}</a>
+        ${i.open?.length ? `<br><small>${i.open.map(esc).join(', ')}</small>` : ''}${!i.blocking && !i.ok ? ' <small>(Hinweis)</small>' : ''}</li>`).join('')}</ul>
+      ${r.ready ? `<p class="banner">${esc(tr('wait_release'))}</p>` : ''}</section>`;
+  }
+  if (gate.reason === 'hygiene_check_required') {
+    const items = ['clothes', 'shoes', 'hair', 'beard', 'nails', 'no_polish', 'jewelry', 'hands', 'wounds', 'no_ban', 'private_items', 'rules'];
+    return `<form data-submit="hygiene" class="card form"><h1>${icon('shield')} ${esc(tr('hygiene_title'))}</h1><p class="note">${esc(tr('hygiene_intro'))}</p>
+      ${items.map((k) => `<fieldset class="yn"><legend>${esc(tr('hy_' + k))}</legend><div class="yn-opts">
+        <label class="option"><input type="radio" name="${k}" value="yes" required><span>${esc(tr('yes'))}</span></label>
+        <label class="option"><input type="radio" name="${k}" value="no"><span>${esc(tr('no'))}</span></label></div></fieldset>`).join('')}
+      <button class="primary block">${icon('check')} ${esc(tr('send'))}</button></form>`;
+  }
+  return `<section class="card lock-card"><h1>${icon('shield')} ${esc(tr('hygiene_title'))}</h1><p class="banner">${esc(gate.message)}</p></section>`;
 }
 
 // --- Kontrolllisten (Ist-Mengen, keine Warenwirtschaft) ------------------------------------
@@ -823,7 +845,7 @@ async function viewOil() {
 function manageNav(active) {
   const items = [['dashboard', 'dash', 'Übersicht'], ['positions', 'store', 'Positionsplan'], ['observe', 'eye', 'Stationscheck'], ['stations', 'star', 'Stationen & Stufen'],
     ['staff', 'lock', 'Mitarbeiter & Zugänge'], ['certs', 'shield', 'Nachweise (§43/METRO)'], ['staffing', 'user', 'Besetzung & Verteilung'], ['week', 'report', 'Wochenbericht'], ['daily', 'box', 'Tagesinventur'], ['onboarding', 'shield', 'Einarbeitung'], ['problems', 'warn', 'Probleme'], ['report', 'report', 'Schichtbericht'], ['templates', 'list', 'Aufgaben-Vorlagen'], ['products', 'history', 'Haltezeiten'],
-    ['controls', 'box', 'Kontrolllisten'], ['reorder', 'box', 'Nachbestellliste'], ['academy', 'school', 'Schulungsbereiche'], ['training', 'school', 'Schulung & Freigaben'], ['stock', 'box', 'Bestand & Codes'], ['oil', 'oil', 'Öl-Grenzwerte'], ['audit', 'history', 'Protokoll']];
+    ['readiness', 'shield', 'Einarbeitung & Hygiene'], ['controls', 'box', 'Kontrolllisten'], ['reorder', 'box', 'Nachbestellliste'], ['academy', 'school', 'Schulungsbereiche'], ['training', 'school', 'Schulung & Freigaben'], ['stock', 'box', 'Bestand & Codes'], ['oil', 'oil', 'Öl-Grenzwerte'], ['audit', 'history', 'Protokoll']];
   if (S.me.is_admin) items.push(['recipes', 'prep', 'Rezepturen (Marinaden)'], ['sops', 'book', 'Anleitungen (SOP)'], ['users', 'user', 'Benutzer & Filialen']);
   const allowed = { dashboard: true, staffing: isShiftLead(), week: isShiftLead(), daily: isShiftLead(), onboarding: isTrainer(), positions: isShiftLead(), observe: isTrainer(), stations: isShiftLead() || isTrainer(), training: isTrainer() || isManager() };
   const visible = items.filter(([k]) => isManager() || allowed[k]);
@@ -833,7 +855,7 @@ function manageNav(active) {
 async function viewManage(sub = 'dashboard', arg) {
   const __seq = renderSeq;
   try {
-    const fn = { dashboard: mDashboard, controls: mControls, reorder: mReorder, academy: mAcademy, staff: mStaff, certs: mCerts, staffing: mStaffing, week: mWeek, recipes: mRecipes, daily: mDaily, onboarding: mOnboarding, positions: mPositions, observe: mObserve, stations: mStations, products: mProducts, problems: mProblems, report: mReport, templates: mTemplates, training: mTraining, stock: mStock, oil: mOil, audit: mAudit, sops: mSops, users: mUsers }[sub] || mDashboard;
+    const fn = { dashboard: mDashboard, readiness: mReadiness, controls: mControls, reorder: mReorder, academy: mAcademy, staff: mStaff, certs: mCerts, staffing: mStaffing, week: mWeek, recipes: mRecipes, daily: mDaily, onboarding: mOnboarding, positions: mPositions, observe: mObserve, stations: mStations, products: mProducts, problems: mProblems, report: mReport, templates: mTemplates, training: mTraining, stock: mStock, oil: mOil, audit: mAudit, sops: mSops, users: mUsers }[sub] || mDashboard;
     const html = await fn(arg);
     render(__seq, `${manageNav(sub)}<div class="manage">${html}</div>`);
   } catch (e) { render(__seq, `${manageNav(sub)}${errorBox(e)}`); }
@@ -925,6 +947,26 @@ async function mControls() {
         <p class="note">Produktbild: oben „Produktbild aufnehmen“, dann hier speichern.</p><button class="small primary">speichern</button></form></details></td></tr>`).join('')}</tbody></table>
       <form data-submit="ctl-item-new" data-id="${l.id}" class="inline"><input name="name" placeholder="Neuer Artikel" required aria-label="Neuer Artikel"><input name="unit" placeholder="Einheit" aria-label="Einheit" size="8"><input name="min_qty" type="number" step="0.01" min="0" placeholder="min." aria-label="Mindestwert" size="6"><button class="small primary">hinzufügen</button></form>
     </details>`).join('')}`;
+}
+
+async function mReadiness() {
+  const d = await get(`/api/readiness?branch=${S.branch}`);
+  const label = { clothes: 'Kleidung', shoes: 'Schuhe', hair: 'Haare', beard: 'Bart', nails: 'Nägel', no_polish: 'Nagellack/künstliche Nägel', jewelry: 'Schmuck', hands: 'Hände', wounds: 'Wunden', no_ban: 'mögliches Tätigkeitsverbot', private_items: 'private Gegenstände', rules: 'Regeln' };
+  const short = { ifsg43: '§43', employer_instruction: 'AG-Belehrung', onboarding: 'Einweisung', trainings: 'Schulungen', annual_hygiene: 'Hygiene 12 M.' };
+  return `<h1>${icon('shield')} Einarbeitung & Hygiene</h1>
+    <p class="note">Reguläre Aufgaben und Kontrolllisten erst nach Freigabe. Lernen, Handbuch und Nachweise bleiben offen. Belehrung nach §43 IfSG vor erster Tätigkeit (höchstens 3 Monate alt), Arbeitgeberbelehrung bei Aufnahme und alle 2 Jahre. Kein Rechtsrat – Fristen bitte mit Fachberatung bestätigen.</p>
+    <form data-submit="readiness-settings" class="form card inline"><label class="check"><input type="checkbox" name="gate_release" ${d.gate_release ? 'checked' : ''}> Sperre bis Freigabe</label>
+      <label class="check"><input type="checkbox" name="gate_hygiene" ${d.gate_hygiene ? 'checked' : ''}> Hygiene-Check vor jeder Schicht</label>
+      <label>Antworten löschen nach (Tagen)<input name="retention_days" type="number" min="1" max="365" value="${d.retention_days}"></label><button class="primary">Speichern</button></form>
+    <h2>Hygiene-Check: Rückfragen (${d.pending.length})</h2>
+    ${d.pending.map((p) => `<form data-submit="hygiene-review" data-id="${p.id}" class="card form"><b>${esc(p.name)}</b> · ${esc(p.work_date)} · ${esc(p.shift)}
+      <p>Nein bei: ${p.no.map((k) => esc(label[k] || k)).join(', ')}</p>
+      ${p.can_clear ? '' : '<p class="banner">Mögliches Tätigkeitsverbot: keine Arbeit mit Lebensmitteln. Klärung nach Vorgabe (IfSG, ggf. Gesundheitsamt).</p>'}
+      <div class="row">${p.can_clear ? '<button class="primary" value="cleared">Geklärt – darf arbeiten</button>' : ''}<button class="danger" value="blocked">Heute nicht mit Lebensmitteln</button></div></form>`).join('') || '<p class="note">Keine offenen Rückfragen.</p>'}
+    <h2>Mitarbeiter</h2><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Name</th>${Object.values(short).map((x) => `<th>${x}</th>`).join('')}<th>Freigabe</th></tr></thead><tbody>
+    ${d.people.map((p) => `<tr><td>${esc(p.display_name)}</td>${p.items.map((i) => `<td class="${i.ok ? 'ok-cell' : ''}">${i.ok ? '✓' : i.blocking ? '✗' : '–'}</td>`).join('')}
+      <td>${p.released ? `✓ <small>${esc(p.release.released_name)}</small><form data-submit="revoke" data-user="${p.id}" class="inline"><input name="note" placeholder="Grund" aria-label="Grund"><button class="small">entziehen</button></form>`
+        : p.ready ? `<form data-submit="release" data-user="${p.id}" class="inline"><label class="check"><input type="checkbox" name="prior_activity"> früher rechtzeitig aufgenommen</label><input name="note" placeholder="Notiz" aria-label="Notiz"><button class="small primary">freigeben</button></form>` : '<small>noch nicht bereit</small>'}</td></tr>`).join('')}</tbody></table></div>`;
 }
 
 async function mReorder() {
@@ -1503,6 +1545,15 @@ document.addEventListener('submit', async (ev) => {
       }
       case 'ctl-item-new': await post(`/api/controls/lists/${form.dataset.id}/items`, { name: fd.name, unit: fd.unit, min_qty: fd.min_qty }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'ctl-review': await post(`/api/controls/runs/${form.dataset.id}/review`, { ok: submitter?.value !== 'rework', note: fd.note }); S.flash = { type: 'ok', text: tr('saved') }; break;
+      case 'hygiene': {
+        const answers = Object.fromEntries(['clothes', 'shoes', 'hair', 'beard', 'nails', 'no_polish', 'jewelry', 'hands', 'wounds', 'no_ban', 'private_items', 'rules'].map((k) => [k, fd[k]]));
+        const r = await post('/api/hygiene', { branch: S.branch, shift: S.shift, answers });
+        S.flash = { type: r.all_ok ? 'ok' : 'warn', text: r.all_ok ? tr('saved') : tr('hygiene_intro') }; break;
+      }
+      case 'release': await post(`/api/readiness/${form.dataset.user}/release`, { branch: S.branch, prior_activity: !!fd.prior_activity, note: fd.note }); S.flash = { type: 'ok', text: 'Freigegeben.' }; break;
+      case 'revoke': await post(`/api/readiness/${form.dataset.user}/revoke`, { branch: S.branch, note: fd.note }); S.flash = { type: 'ok', text: 'Freigabe entzogen.' }; break;
+      case 'readiness-settings': await api('PUT', '/api/readiness/settings', { branch: S.branch, gate_release: !!fd.gate_release, gate_hygiene: !!fd.gate_hygiene, retention_days: fd.retention_days }); S.flash = { type: 'ok', text: tr('saved') }; break;
+      case 'hygiene-review': await post(`/api/hygiene/${form.dataset.id}/review`, { decision: submitter?.value }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'receive': {
         const r = await post(`/api/stock/orders/${form.dataset.id}/receive`, { qty: fd.qty, stock_after: fd.stock_after });
         S.flash = { type: 'ok', text: `${tr('saved')}${r.open_qty ? ` · offen: ${r.open_qty}` : ''}` }; break;

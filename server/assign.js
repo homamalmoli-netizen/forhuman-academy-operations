@@ -2,6 +2,7 @@
 // Verteilung: nur an Personen, die für die Schicht eingeteilt/anwesend sind, die Rolle/Schulung/Station haben;
 // faire Verteilung nach aktueller Aufgabenlast; jede Aufgabe genau einer Person; nicht zuweisbar → Eskalation an die Leitung.
 import { tx, audit } from './db.js';
+import { workGate } from './readiness.js';
 import { berlinDate, qualification, addDays, generateTasks } from './app.js';
 import { can } from './auth.js';
 import { stationAccess } from './stations.js';
@@ -152,6 +153,7 @@ export function registerAssign({ route, db, needUser, needBranch, HttpError, bad
     if (!o) throw notFound();
     const branchId = needBranch(ctx, o.branch_id);
     if (!['open', 'rework'].includes(o.status)) throw new HttpError(409, 'not_open', 'Aufgabe ist nicht offen');
+    { const g = workGate(db, u.id, branchId, o.shift); if (!g.ok) throw new HttpError(403, g.reason, g.message); }
     if (o.assigned_to && o.assigned_to !== u.id && !can(u, branchId, 'manager', 'shift_lead', 'admin')) throw new HttpError(403, 'assigned_other', 'Aufgabe ist einer anderen Person zugewiesen');
     const full = db.prepare('SELECT o.*, t.role, t.required_course_id, t.station_id FROM task_occurrences o JOIN task_templates t ON t.id = o.template_id WHERE o.id = ?').get(o.id);
     if (!can(u, branchId, 'manager', 'shift_lead', 'admin') && !eligible(db, u.id, full)) throw new HttpError(403, 'not_eligible', 'Dafür fehlt dir Schulung, Rolle oder Stationsfreigabe');
