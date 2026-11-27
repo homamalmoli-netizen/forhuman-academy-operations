@@ -158,6 +158,8 @@ function taskCard(n) {
           ${n.link === 'inventory' ? `<a class="act" href="#/inventory">${icon('box')}<span>${esc(tr('open_inventory'))}</span></a>` : ''}
           ${n.link === 'daily_early' || n.link === 'daily_late' ? `<a class="act" href="#/daily/${n.link === 'daily_early' ? 'early' : 'late'}">${icon('box')}<span>${esc(tr('daily_inventory'))}</span></a>` : ''}
           ${n.link === 'pest_check' ? `<a class="act" href="#/pest">${icon('bug')}<span>${esc(tr('pest_check'))}</span></a>` : ''}
+          ${n.link === 'marinade' ? `<a class="act" href="#/marinade">${icon('prep')}<span>${esc(tr('marinade'))}</span></a>` : ''}
+          ${n.link === 'goods' ? `<a class="act" href="#/goods">${icon('scan')}<span>${esc(tr('tab_goods'))}</span></a>` : ''}
           ${n.link === 'oil_check' || n.link === 'oil_change' ? `<a class="act" href="#/oil">${icon('oil')}<span>${esc(tr('tab_oil'))}</span></a>` : ''}
           <a class="act warn" href="#/problem/${n.id}">${icon('warn')}<span>${esc(tr('btn_problem'))}</span></a>
         </div>
@@ -1101,8 +1103,13 @@ async function mTraining() {
 }
 
 async function mStock() {
-  const [stock, unknown, items] = await Promise.all([get(`/api/stock?branch=${S.branch}`), get(`/api/goods/unknown?branch=${S.branch}`), get('/api/items')]);
-  return `<h1>${icon('box')} Bestand & Codes</h1>${stockTable(stock, true)}
+  const [stock, unknown, items, rhythm] = await Promise.all([get(`/api/stock?branch=${S.branch}`), get(`/api/goods/unknown?branch=${S.branch}`), get('/api/items'), get(`/api/items/rhythm?branch=${S.branch}`)]);
+  const rRow = (i) => `<tr><td>${esc(i.name)}</td><td>${esc(i.category)}</td><td><select data-change="item-rhythm" data-id="${i.id}" aria-label="Zählrhythmus ${esc(i.name)}">
+    <option value="daily" ${i.rhythm === 'daily' ? 'selected' : ''}>täglich (Früh + Spät)</option><option value="weekly" ${i.rhythm === 'weekly' ? 'selected' : ''}>nur wöchentlich</option></select></td></tr>`;
+  return `<h1>${icon('box')} Bestand & Codes</h1>
+    <h2>Zählrhythmus</h2><p class="note">„Täglich“ steht auf der Tagesinventur (Frühschicht und Spätschicht). Die Wocheninventur zählt immer alle Artikel – auch die nur wöchentlich gezählten wie Saucen und Marinaden.</p>
+    <table class="tbl"><thead><tr><th>Artikel</th><th>Gruppe</th><th>Zählen</th></tr></thead><tbody>${rhythm.map(rRow).join('')}</tbody></table>
+    ${stockTable(stock, true)}
     <h2>Nachbestellliste</h2><ul class="plain">${stock.filter((s) => s.below_min).map((s) => `<li>${esc(s.name)}: ${s.qty} / min. ${s.min_qty} ${esc(s.unit)}${s.metro_article_no ? ' · METRO ' + esc(s.metro_article_no) : ''}</li>`).join('') || '<li>Nichts nachzubestellen.</li>'}</ul>
     <h2>Unbekannte Codes zuordnen</h2>${unknown.map((u) => `<form data-submit="assign-code" data-id="${u.id}" class="inline card"><code>${esc(u.code)}</code> <small>${esc(u.kind)}</small>
       <select name="item_id" required><option value="">Artikel wählen</option>${items.map((i) => `<option value="${i.id}">${esc(i.name)}</option>`).join('')}</select><button class="small primary">Zuordnen</button></form>`).join('') || '<p>Keine offenen Codes.</p>'}
@@ -1266,6 +1273,7 @@ document.addEventListener('change', async (ev) => {
   try {
     if (C === 'lang') { setLang(el.value); return route(); }
     if (C === 'branch') { S.branch = Number(el.value); localStorage.setItem('fh_branch', S.branch); return route(); }
+    if (C === 'item-rhythm') { await api('PUT', `/api/items/${el.dataset.id}/rhythm`, { branch: S.branch, rhythm: el.value }); S.flash = { type: 'ok', text: tr('saved') }; return route(); }
     if (C === 'staff-role') {
       const row = el.closest('[data-user]');
       const roles = [...row.querySelectorAll('input[data-change=staff-role]:checked')].map((x) => x.value);

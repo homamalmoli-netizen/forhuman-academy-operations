@@ -357,6 +357,12 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
       const st = dailyStatus(db, branchId)[action === 'daily_early' ? 'early' : 'late'];
       if (!['on_time', 'late_done'].includes(st.state)) throw new HttpError(409, 'daily_missing', 'Erst die Tagesinventur abschließen');
     }
+    if (action === 'marinade') {
+      // Jede Marinier-Aufgabe braucht eine neue Charge im Protokoll seit der letzten erledigten Marinier-Aufgabe (sonst seit heute 0 Uhr)
+      const last = db.prepare("SELECT MAX(completed_at) t FROM task_occurrences o JOIN task_templates t2 ON t2.id = o.template_id WHERE o.branch_id = ? AND t2.action = 'marinade' AND o.status = 'done'").get(branchId).t;
+      const since = last && berlinDate(new Date(last)) === berlinDate() ? last : new Date(`${berlinDate()}T00:00:00`).toISOString();
+      if (!db.prepare('SELECT 1 FROM marinade_batches WHERE branch_id = ? AND created_at > ?').get(branchId, since)) throw new HttpError(409, 'marinade_missing', 'Erst die Charge im Marinierprotokoll eintragen');
+    }
     if (action === 'pest_check') {
       const lastPest = db.prepare('SELECT created_at FROM pest_checks WHERE branch_id = ? ORDER BY id DESC LIMIT 1').get(branchId);
       if (!lastPest || berlinDate(new Date(lastPest.created_at)) !== berlinDate()) throw new HttpError(409, 'pest_missing', 'Erst die Schädlingskontrolle ausfüllen');

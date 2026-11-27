@@ -734,6 +734,10 @@ const MIGRATIONS = [
     FROM train_modules m JOIN train_areas a ON a.id = m.area_id WHERE m.id = train_questions.module_id) WHERE updated_by IS NULL;
   CREATE UNIQUE INDEX idx_tq_seed ON train_questions(seed_key) WHERE seed_key IS NOT NULL;
   `,
+  // 10: Zählrhythmus je Artikel – Saucen und Marinaden nur noch in der Wocheninventur, nicht mehr täglich.
+  `
+  UPDATE items SET daily_count = 0 WHERE daily_count = 1 AND category IN ('Sauce','Marinade');
+  `,
 ];
 
 export function openDb(file = ':memory:') {

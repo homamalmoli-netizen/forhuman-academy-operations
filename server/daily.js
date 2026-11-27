@@ -153,6 +153,24 @@ export function registerDaily({ route, db, needUser, needBranch, HttpError, bad,
     return { ok: true };
   });
 
+  // Zählrhythmus je Artikel: täglich (Tagesinventur Früh/Spät) oder nur wöchentlich (Wocheninventur zählt immer alle Artikel)
+  route('GET', '/api/items/rhythm', (ctx) => {
+    needBranch(ctx, ctx.query.get('branch'), 'manager', 'shift_lead', 'admin');
+    return db.prepare('SELECT id, name, unit, category, daily_count FROM items WHERE active = 1 ORDER BY daily_count DESC, category, name').all()
+      .map((i) => ({ ...i, rhythm: i.daily_count ? 'daily' : 'weekly' }));
+  });
+  route('PUT', '/api/items/:id/rhythm', (ctx) => {
+    const u = needUser(ctx);
+    const branchId = needBranch(ctx, ctx.body.branch, 'manager', 'admin');
+    const rhythm = ctx.body.rhythm;
+    if (!['daily', 'weekly'].includes(rhythm)) throw bad('rhythm', 'täglich oder wöchentlich');
+    const item = db.prepare('SELECT id, name FROM items WHERE id = ? AND active = 1').get(Number(ctx.params.id));
+    if (!item) throw bad('item');
+    db.prepare('UPDATE items SET daily_count = ? WHERE id = ?').run(rhythm === 'daily' ? 1 : 0, item.id);
+    audit(db, { actor: u.id, branch: branchId, action: 'item_rhythm', entity: 'item', id: item.id, payload: { rhythm } });
+    return { ok: true };
+  });
+
   // --- Schädlingskontrolle ---
   route('GET', '/api/pest', (ctx) => {
     needUser(ctx);

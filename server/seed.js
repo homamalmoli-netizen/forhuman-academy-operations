@@ -63,7 +63,13 @@ const TEMPLATES = [
   ['close', 'safety', 'shield', L('Abschlusskontrolle', 'Final check', 'الفحص النهائي', 'Son kontrol'),
     L('Rundgang: alles sauber, Kühlung an, Geräte aus, Müll weg. Foto.', 'Walk-round: all clean, refrigeration on, equipment off, rubbish out. Photo.', 'جولة: كل شيء نظيف، التبريد يعمل، الأجهزة مطفأة، القمامة خارجًا. صورة.', 'Tur: her yer temiz, soğutma açık, cihazlar kapalı, çöp dışarıda. Fotoğraf.'), { photo: 1, role: 'shift_lead' }],
   ['close', 'goods', 'box', L('Wöchentliche Inventur', 'Weekly stock count', 'الجرد الأسبوعي', 'Haftalık sayım'),
-    L('Alle Artikel zählen und Inventur abschließen.', 'Count all items and complete the stock count.', 'عدّ كل الأصناف وأنهِ الجرد.', 'Tüm ürünleri say ve sayımı tamamla.'), { freq: 'weekly', weekdays: '1', role: 'shift_lead', link: 'inventory' }],
+    L('Alle Artikel zählen – auch Saucen und Marinaden, die nicht täglich gezählt werden – und Inventur abschließen.', 'Count all items – including sauces and marinades, which are not counted daily – and complete the stock count.', 'عدّ كل الأصناف – بما فيها الصلصات والتتبيلات التي لا تُعدّ يوميًا – وأنهِ الجرد.', 'Tüm ürünleri say – günlük sayılmayan soslar ve marinatlar dahil – ve sayımı tamamla.'), { freq: 'weekly', weekdays: '1', role: 'shift_lead', link: 'inventory' }],
+  ['run', 'routine', 'prep', L('Fleisch marinieren (Frühschicht)', 'Marinate meat (early shift)', 'تتبيل اللحم (الوردية الصباحية)', 'Et marine et (sabah vardiyası)'),
+    L('Nach freigegebener Rezeptur marinieren und die Charge im Marinierprotokoll eintragen.', 'Marinate by the approved recipe and log the batch in the marinade protocol.', 'تبّل حسب الوصفة المعتمدة وسجّل الدفعة في بروتوكول التتبيل.', 'Onaylı tarife göre marine et ve partiyi marine protokolüne kaydet.'), { action: 'marinade' }],
+  ['close', 'routine', 'prep', L('Fleisch marinieren (Spätschicht)', 'Marinate meat (late shift)', 'تتبيل اللحم (الوردية المسائية)', 'Et marine et (akşam vardiyası)'),
+    L('Nach freigegebener Rezeptur marinieren und die Charge im Marinierprotokoll eintragen.', 'Marinate by the approved recipe and log the batch in the marinade protocol.', 'تبّل حسب الوصفة المعتمدة وسجّل الدفعة في بروتوكول التتبيل.', 'Onaylı tarife göre marine et ve partiyi marine protokolüne kaydet.'), { action: 'marinade' }],
+  ['run', 'goods', 'scan', L('Wareneingang der Woche prüfen', 'Check this week’s goods receipts', 'مراجعة استلام البضاعة لهذا الأسبوع', 'Haftanın mal kabulünü kontrol et'),
+    L('Alle Lieferungen der Woche mit Lieferschein in der App erfasst? Fehlende Lieferungen nachbuchen, Abweichungen melden.', 'All deliveries this week recorded in the app with delivery note? Book missing ones, report deviations.', 'هل سُجّلت كل توريدات الأسبوع في التطبيق مع إشعار التسليم؟ سجّل الناقص وأبلغ عن الانحرافات.', 'Haftanın tüm teslimatları irsaliyeyle uygulamaya girildi mi? Eksikleri gir, sapmaları bildir.'), { freq: 'weekly', weekdays: '1', role: 'shift_lead', action: 'goods' }],
   ['run', 'goods', 'box', L('Tagesinventur Frühschicht (bis 17:00)', 'Daily stock count early shift (by 17:00)', 'جرد يومي للوردية الصباحية (حتى 17:00)', 'Sabah vardiyası günlük sayım (17:00\'a kadar)'),
     L('Liste unter Ware → Tagesinventur ausfüllen.', 'Fill in the list under Goods → Daily count.', 'املأ القائمة في البضاعة ← الجرد اليومي.', 'Mal → Günlük sayım listesini doldur.'), { action: 'daily_early' }],
   ['close', 'goods', 'box', L('Tagesinventur Spätschicht (bis 23:00)', 'Daily stock count late shift (by 23:00)', 'جرد يومي للوردية المسائية (حتى 23:00)', 'Akşam vardiyası günlük sayım (23:00\'e kadar)'),
@@ -355,8 +361,9 @@ export function seedStations(db, branchId) {
 
 export function seedDailyItems(db) {
   // Artikel der täglichen Inventurliste (Vorlage des Betreibers)
-  const insItem = db.prepare('INSERT INTO items (name, unit, category, daily_count, meat) SELECT ?,?,?,1,? WHERE NOT EXISTS (SELECT 1 FROM items WHERE name = ?)');
-  for (const [name, unit, cat, meat] of DAILY_ITEMS) insItem.run(name, unit, cat, meat, name);
+  // Täglich gezählt: Fleisch, Pommes, Öl, Wraps, Burger-Brötchen usw.; Saucen und Marinaden nur wöchentlich (Wocheninventur)
+  const insItem = db.prepare('INSERT INTO items (name, unit, category, daily_count, meat) SELECT ?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM items WHERE name = ?)');
+  for (const [name, unit, cat, meat] of DAILY_ITEMS) insItem.run(name, unit, cat, ['Sauce', 'Marinade'].includes(cat) ? 0 : 1, meat, name);
 }
 
 export function seedBase(db, { dailyItems = true } = {}) {

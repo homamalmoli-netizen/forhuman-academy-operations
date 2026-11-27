@@ -18,7 +18,8 @@ describe('Tägliche Inventur, Schädlingskontrolle, Handbuch', () => {
     assert.equal((await mgr.req('PUT', '/api/daily/settings', { branch: HALLE, early: '23:59', late: '00:00' })).status, 200);
     const emp = await srv.client().as('employee_halle');
     const d = (await emp.get(`/api/daily?branch=${HALLE}&shift=early`)).data;
-    assert.deepEqual(d.items.map((i) => i.name).sort(), DAILY_ITEMS.map((x) => x[0]).sort());
+    // Saucen und Marinaden werden nur wöchentlich gezählt
+    assert.deepEqual(d.items.map((i) => i.name).sort(), DAILY_ITEMS.filter((x) => !['Sauce', 'Marinade'].includes(x[2])).map((x) => x[0]).sort());
     assert.equal(d.items.filter((i) => i.meat).length, 3);
     assert.equal(d.deadline, '23:59');
     const partial = await emp.post('/api/daily', { branch: HALLE, shift: 'early', submit: true, lines: [{ item_id: d.items[0].item_id, counted: 10 }] });
@@ -110,5 +111,32 @@ describe('Tägliche Inventur, Schädlingskontrolle, Handbuch', () => {
     const list = (await trainer.get(`/api/onboarding?branch=${HALLE}`)).data.people.find((p) => p.id === ids['demo.mitarbeiter.halle']);
     assert.deepEqual(list.confirmation.areas, ['Persönliche Hygiene', 'HACCP']);
     assert.ok(list.confirmation.employee_confirmed_at && list.confirmation.trainer_confirmed_at);
+  });
+  test('Zählrhythmus je Artikel, Marinier-Aufgabe Früh/Spät, Wareneingang wöchentlich', async () => {
+    const mgr = await srv.client().as('manager_halle');
+    const emp = await srv.client().as('employee_halle');
+    const items = (await mgr.get(`/api/items/rhythm?branch=${HALLE}`)).data;
+    const sauce = items.find((i) => i.category === 'Sauce');
+    assert.equal(sauce.rhythm, 'weekly');
+    assert.equal(items.find((i) => i.name === 'Pommes frites').rhythm, 'daily');
+    assert.equal((await emp.req('PUT', `/api/items/${sauce.id}/rhythm`, { branch: HALLE, rhythm: 'daily' })).status, 403);
+    assert.equal((await mgr.req('PUT', `/api/items/${sauce.id}/rhythm`, { branch: HALLE, rhythm: 'monthly' })).data.error, 'rhythm');
+    assert.equal((await mgr.req('PUT', `/api/items/${sauce.id}/rhythm`, { branch: HALLE, rhythm: 'daily' })).status, 200);
+    assert.ok((await emp.get(`/api/daily?branch=${HALLE}&shift=late`)).data.items.some((i) => i.item_id === sauce.id));
+    await mgr.req('PUT', `/api/items/${sauce.id}/rhythm`, { branch: HALLE, rhythm: 'weekly' });
+    const tpl = (title) => srv.db.prepare("SELECT * FROM task_templates WHERE branch_id = ? AND title LIKE ?").get(HALLE, `%${title}%`);
+    assert.equal(tpl('Fleisch marinieren (Frühschicht)').shift, 'run');
+    assert.equal(tpl('Fleisch marinieren (Spätschicht)').shift, 'close');
+    const goods = tpl('Wareneingang der Woche');
+    assert.equal(goods.frequency, 'weekly'); assert.equal(goods.action, 'goods');
+    // Marinier-Aufgabe erst nach neuer Charge im Protokoll erledigbar
+    srv.db.prepare("DELETE FROM marinade_batches WHERE branch_id = ?").run(HALLE);
+    await emp.get(`/api/shift/next?branch=${HALLE}&shift=run`);
+    const occ = srv.db.prepare(`SELECT o.id FROM task_occurrences o JOIN task_templates t ON t.id = o.template_id WHERE o.branch_id = ? AND t.action = 'marinade' AND t.shift = 'run' ORDER BY o.id DESC LIMIT 1`).get(HALLE);
+    assert.equal((await emp.post(`/api/tasks/${occ.id}/complete`, {})).data.error, 'marinade_missing');
+    const empId = (await emp.get('/api/me')).data.id;
+    srv.db.prepare(`INSERT INTO marinade_batches (branch_id, marinade_id, recipe_version, meat_item_id, meat_kg, ingredients, batch_code, created_by)
+      VALUES (?, (SELECT id FROM marinades LIMIT 1), 1, (SELECT id FROM items WHERE meat = 1 LIMIT 1), 1, '[]', 'TEST-RUN', ?)`).run(HALLE, empId);
+    assert.equal((await emp.post(`/api/tasks/${occ.id}/complete`, {})).status, 200);
   });
 });
