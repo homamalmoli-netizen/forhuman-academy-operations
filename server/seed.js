@@ -7,6 +7,7 @@ import { EXTRA_COURSES } from './courses-extra.js';
 import { DAILY_ITEMS } from './handbook.js';
 import { seedTraining } from './training.js';
 import { seedControls } from './controls.js';
+import { seedGuides } from './guides.js';
 
 const L = (de, en, ar, tr) => ({ de, en, ar, tr });
 
@@ -390,6 +391,7 @@ export function seedBase(db, { dailyItems = true } = {}) {
   });
   if (dailyItems) seedDailyItems(db);
   seedTraining(db);
+  seedGuides(db);
   // Startvorlagen je Filiale (Manager kann sie danach ändern, sortieren, abschalten)
   for (const b of db.prepare('SELECT id FROM branches').all()) { seedStations(db, b.id); seedTemplates(db, b.id); seedControls(db, b.id); }
 }
@@ -443,7 +445,8 @@ export function seedDemo(db) {
     mem.run(users.empLeuna, leuna, 'employee');
     mem.run(users.leadHalle, halle, 'shift_lead');
     mem.run(users.empHalle2, halle, 'employee');
-    db.prepare("UPDATE sop_versions SET status = 'approved', approved_by = ?, approved_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')").run(users.admin);
+    // Bereichsanleitungen (Issue #20) bleiben auch in der Demo gesperrte Entwürfe, bis Fotos/Werte vom Betreiber vorliegen
+    db.prepare("UPDATE sop_versions SET status = 'approved', approved_by = ?, approved_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE sop_id NOT IN (SELECT id FROM sops WHERE code LIKE 'bereich-%')").run(users.admin);
 
     // Fiktiver Artikelstamm. GTINs aus dem GS1-Bereich 20-29 (nur für interne Nutzung, kollidiert nie mit echten Produkten), gültige Prüfziffer.
     const insItem = db.prepare('INSERT INTO items (name, unit, category, metro_article_no, needs_temperature) VALUES (?,?,?,?,?)');
@@ -511,4 +514,11 @@ export function seedDemo(db) {
   db.prepare(`INSERT INTO marinade_versions (marinade_id, version, ingredients, allergens, tolerance_percent, use_within_hours, use_source, created_by)
     VALUES (?, 1, ?, 'DEMO: Allergene laut Allergenliste der Filiale', 5, 24, 'DEMO-Wert (fiktiv) – nicht für den Betrieb', (SELECT id FROM users WHERE username = 'demo.admin'))`)
     .run(mid, JSON.stringify([{ name: 'DEMO Zutat A', per_kg: 50, unit: 'g' }, { name: 'DEMO Zutat B', per_kg: 20, unit: 'g' }, { name: 'DEMO Flüssigkeit C', per_kg: 100, unit: 'ml' }]));
+  // Demo: fiktive Mitarbeiter gelten als eingearbeitet und freigegeben; der tägliche Hygiene-Check ist in der Demo aus
+  // (im Echtbetrieb sind beide Sperren standardmäßig an und unter Leitung → Einarbeitung & Hygiene schaltbar).
+  const demoAdmin = db.prepare("SELECT id FROM users WHERE username = 'demo.admin'").get().id;
+  for (const m of db.prepare("SELECT DISTINCT user_id, branch_id FROM memberships WHERE role IN ('employee','shift_lead')").all())
+    db.prepare("INSERT OR IGNORE INTO work_releases (user_id, branch_id, released_by, note) VALUES (?,?,?, 'DEMO')").run(m.user_id, m.branch_id, demoAdmin);
+  for (const b of db.prepare('SELECT id FROM branches').all())
+    db.prepare("INSERT OR REPLACE INTO branch_settings (branch_id, key, value) VALUES (?, 'gate_hygiene', '0')").run(b.id);
 }

@@ -5,33 +5,62 @@
 // Kein Telefonanruf (Entscheidung des Betreibers); externe Kanäle nur, wenn eingerichtet.
 import { tx, audit } from './db.js';
 import { berlinDate } from './app.js';
+import { evaluateStock, escalateZeroAlerts } from './stock.js';
+import { workGate, purgeHygiene } from './readiness.js';
 
-// Artikel aus den Betreiberlisten. min: null = Mindestwert offen (nicht erfunden). unit: 'offen' = Einheit noch zu klären.
+// Artikel aus den Betreiberlisten und Produktfotos (Issue #20). min: null = Mindestwert offen (nicht erfunden).
+// unit 'offen' = Einheit noch zu klären. o: { sup: Lieferant, crit: zeitkritisch, urgent: zusätzliche dringende Schwelle,
+// art: verifizierte Artikelnummer (nur vom Etikett/Foto), pack: Gebinde laut Etikett }.
+const SAUCE = { crit: 1 };
 export const CONTROL_LISTS = [
-  { code: 'regal1', name: 'Regal 1 (Marinaden, Panade, Gewürz)', schedule: 'weekly', weekday: 1, due: '17:10', items: [
-    ['Milde Marinade', 'Tüten', 50], ['Pikante Marinade', 'Tüten', 50], ['Panda Panade (Mehl)', 'kg', 50], ['Pommesgewürz', 'Tüten', 3]] },
-  { code: 'regal2', name: 'Regal 2 (Saucen, Flaschen)', schedule: 'weekly', weekday: 1, due: '17:10', items: [
-    ['Knoblauch Sauce', 'Flaschen', 15], ['BBQ Sauce', 'Flaschen', 15], ['Mayo', 'Flaschen', 15], ['Ketchup', 'Flaschen', 15],
-    ['Remoulade', 'Flaschen', 15], ['Mexikanische Sauce', 'Flaschen', 15], ['Cheese Sauce', 'Flaschen', 15], ['Chilli Cheese Sauce', 'Flaschen', 4],
-    ['Smoky Sauce', 'Flaschen', 5], ['Sweet Sauce', 'Flaschen', 5], ['Trüffel Sauce', 'Flaschen', 2], ['Granatapfel Sauce', 'Flaschen', null]] },
+  { code: 'regal1', name: 'Regal 1 (Marinaden, Panade, Gewürz, Öl)', schedule: 'weekly', weekday: 1, due: '17:10', items: [
+    ['Milde Marinade', 'Tüten', 50, { crit: 1 }], ['Pikante Marinade (Hot)', 'Tüten', 50, { crit: 1 }], ['Panda Panade (Mehl)', 'kg', 50],
+    ['Pommesgewürz', 'Tüten', 3], ['aro Frittieröl 10 L', 'Kanister', null, { pack: '10 L' }]] },
+  { code: 'regal2', name: 'Regal 2 (Saucen)', schedule: 'weekly', weekday: 1, due: '17:10', items: [
+    ['Knoblauch Sauce', 'Flaschen', 10, SAUCE], ['BBQ Sauce', 'Flaschen', 10, SAUCE], ['Mayo', 'Flaschen', 10, SAUCE], ['Ketchup', 'Flaschen', 10, SAUCE],
+    ['Remoulade', 'Flaschen', 10, SAUCE], ['Mexikanische Sauce', 'Flaschen', 10, SAUCE], ['Cheese Sauce', 'Flaschen', 10, SAUCE],
+    ['SALOMON FoodWorld Chili Cheese Burger Sauce', 'Flaschen', 10, { crit: 1, pack: '2 L' }],
+    ['Smoky Sauce', 'Flaschen', 5, { crit: 1, sup: 'METRO' }], ['Sweet Sauce', 'Flaschen', 5, { crit: 1, sup: 'METRO' }], ['Trüffel Sauce', 'Flaschen', 2, SAUCE],
+    ['Granatapfel Sauce', 'Flaschen', null, SAUCE],
+    // Portionsprodukte getrennt von Großflaschen
+    ['Heinz Tomato Ketchup Portionen 100 × 20 g', 'Karton', null, { crit: 1, pack: '100 × 20 g (2 kg)' }],
+    ['Heinz Salat Mayonnaise Portionen 100 × 17 g', 'Karton', null, { crit: 1, pack: '100 × 17 g (1,7 kg)' }],
+    ['Heinz Sweet & Sour Portionen 100 × 25 g', 'Karton', null, { crit: 1, pack: '100 × 25 g (2,5 kg)' }]] },
   { code: 'hygiene', name: 'Reinigungsmittel & Hygieneartikel', schedule: 'weekly', weekday: 1, due: '17:10', items: [
     ['METRO PROFESSIONAL Handspülmittel 5 L', 'Gebinde', 1], ['Dr. Becher Fritteusen-Reiniger Tabs', 'Packung', 1], ['Edelstahlreiniger METRO', 'Flasche', 1],
-    ['Fettlöser', 'Flasche', 1], ['Bodenreiniger Konzentrat 10 L', 'Kanister', 1], ['Glasreiniger', 'Flasche', 1],
-    ['Tork Xpressnap Spenderservietten N4', 'Karton', 1], ['Toilettenpapier', 'Packung', 1], ['Tork Papierhandtücher', 'Karton', 1],
+    ['METRO PROFESSIONAL Fettlöser 750 ml Sprühflasche', 'Flasche', 1], ['METRO PROFESSIONAL Fettlöser Konzentrat 5 L', 'Kanister', 1],
+    ['aro Vollglanz Bodenreiniger 5 L', 'Kanister', 1], ['Glasreiniger', 'Flasche', 1],
+    ['Tork Xpressnap Spenderservietten N4 weiß', 'Karton', 1, { art: '10840', pack: '1125 Stück' }], ['Toilettenpapier', 'Packung', 1],
+    ['Tork Papierhandtücher', 'Karton', 1], ['Tork M1 Papierwischtücher weiß 1-lagig', 'Karton', 1, { art: '610133', pack: '3 × 120 m' }],
     ['Flüssigseife', 'Gebinde', 1], ['Desinfektionsmittel', 'Gebinde', 1], ['Reinigungslappen / Putzlappen', 'Packung', 1]] },
+  { code: 'verpackung', name: 'Verpackung', schedule: 'weekly', weekday: 1, due: '17:10', items: [
+    ['PAPSTAR Hamburger-Tüten Newsprint', 'Packung', null, { pack: '1000 Stück' }],
+    ['METRO PROFESSIONAL Servietten Cream 33 × 33 cm', 'Packung', null, { pack: '250 Stück' }],
+    ['PAPSTAR Dressingbecher PP 100 ml', 'Packung', null, { pack: '50 Stück' }]] },
   { code: 'tiefkuehl', name: 'Tiefkühlware', schedule: 'interval', interval: 3, due: '17:10', items: [
-    ['Mozzarella Sticks', 'offen', null], ['Chili Cheese Nuggets', 'offen', null], ['Onion Rings', 'offen', null],
-    ['Maiskolben', 'offen', null], ['Süßkartoffelpommes', 'offen', null]] },
+    ['METRO Chef Mozzarella Sticks TK', 'Beutel', null, { pack: '1 kg' }], ['METRO Chef Chili Cheese Nuggets TK', 'Beutel', null, { pack: '1 kg' }],
+    ['METRO Chef Onion Rings TK', 'Beutel', null, { pack: '1 kg' }], ['Maiskolben', 'offen', null],
+    ['METRO Chef Sweet Potato Fries TK', 'Beutel', null, { pack: '2,5 kg' }]] },
   { code: 'kueche', name: 'Küche / Burger-Zutaten', schedule: 'daily', due: '17:10', items: [
-    ['Cheddar-Käsescheiben', 'Packungen', 10], ['Ziegenkäsescheiben', 'Packungen', 5], ['Parmesan', 'Packungen', 2],
-    ['Wrap-Brot', 'Stück', 50], ['Brioche Buns', 'Stück', 80], ['Red Burger Buns', 'Stück', 60], ['Schwarze Burger Buns', 'Stück', 60],
-    ['Jalapeños', 'kg', 2], ['Sauergurken', 'kg', 3], ['Bacon', 'Packungen (500 g)', 3], ['Sucuk', 'Packungen (500 g)', 3], ['Eisberg', 'offen', null], ['Tomaten', 'offen', null]] },
-  // Wrap-Brot steht nur in „Küche“ – keine doppelte tägliche Kontrolle
-  { code: 'frisch', name: 'Frische Ware (Fleisch, Pommes)', schedule: 'daily', due: '17:10', items: [
-    ['Hähnchenbrust (frisch)', 'kg', null], ['Wings (frisch)', 'kg', null], ['Unterschenkel (frisch)', 'kg', null], ['Frische Pommes', 'kg', null]] },
+    ['Cheddar-Käsescheiben', 'Packungen', 10], ['Frischpack Ziegenkäse 50 % Scheiben', 'Packungen', 5, { pack: '500 g' }],
+    ['aro Schmelzkäse würzig-pikant', 'Packungen', null, { pack: '10 × 25 g (250 g)' }], ['Parmesan', 'Packungen', 2],
+    ['METRO Chef Weizen Wraps Mexican Style 25 cm', 'Stück', 50, { pack: '12 Stück (740 g)' }],
+    ['Brioche Burger Buns', 'Stück', 80, { urgent: 60 }], ['Red Burger Buns', 'Stück', 60], ['Schwarze Burger Buns', 'Stück', 60],
+    ['Adria Jalapeños grün geschnitten (3-kg-Dose)', 'kg', 2, { pack: '3 kg Dose – Messbasis (Abtropfgewicht?) klären' }],
+    ['Sauergurken', 'kg', 3], ['Tulip Chicken Bacon', 'Packungen (500 g)', 3, { pack: '500 g' }], ['Sucuk', 'Packungen (500 g)', 3],
+    ['Eisberg', 'offen', null], ['Tomaten', 'offen', null]] },
+  // Wrap steht nur in „Küche“ – keine doppelte tägliche Kontrolle
+  { code: 'frisch', name: 'Frische Ware (Fleisch roh, Pommes)', schedule: 'daily', due: '17:10', items: [
+    ['Hähnchen-Brustfilet roh (Halal, ohne Haut/Knochen)', 'kg', null, { crit: 1 }], ['Wings roh', 'kg', null, { crit: 1 }],
+    ['Unterschenkel roh', 'kg', null, { crit: 1 }],
+    ['Aviko Super Crunch Fresh 11 mm (gekühlt)', 'kg', 40, { crit: 1, pack: '9 kg (2 × 4,5 kg), 0–4 °C' }]] },
+  { code: 'getraenke', name: 'Getränke', schedule: 'daily', due: '17:10', items: [
+    ['Coca-Cola Original 330 ml Dose', 'Dosen', null], ['Fanta Orange 330 ml Dose', 'Dosen', null],
+    ['Capri-Sun Monster Alarm 10 × 200 ml', 'Packungen', null, { pack: '10 × 200 ml' }]] },
+  // Mariniert getrennt von roh – keine Doppelzählung
   { code: 'mariniert', name: 'Mariniertes Fleisch', schedule: 'daily', due: '17:10,23:30', marinated: true, photo: true, items: [
-    ['Hähnchenbrust mild', 'kg', null], ['Hähnchenbrust pikant', 'kg', null], ['Wings mild', 'kg', null], ['Wings pikant', 'kg', null],
-    ['Unterschenkel mild', 'kg', null], ['Unterschenkel pikant', 'kg', null]] },
+    ['Hähnchenbrust mild', 'kg', null, { crit: 1 }], ['Hähnchenbrust pikant', 'kg', null, { crit: 1 }], ['Wings mild', 'kg', null, { crit: 1 }],
+    ['Wings pikant', 'kg', null, { crit: 1 }], ['Unterschenkel mild', 'kg', null, { crit: 1 }], ['Unterschenkel pikant', 'kg', null, { crit: 1 }]] },
 ];
 
 // Höchsttemperatur für Geflügelfleisch und Geflügelfleischzubereitungen (z. B. mariniertes Geflügel): +4 °C laut DIN 10508.
@@ -81,7 +110,8 @@ export function seedControls(db, branchId, today = berlinDate()) {
       const id = Number(db.prepare(`INSERT INTO control_lists (branch_id, code, name, schedule, weekday, interval_days, start_date, due_times, photo_required, marinated, position)
         VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(branchId, l.code, l.name, l.schedule, l.weekday ?? null, l.interval ?? null, l.schedule === 'interval' ? today : null,
         l.due, l.photo ? 1 : 0, l.marinated ? 1 : 0, (i + 1) * 10).lastInsertRowid);
-      l.items.forEach(([name, unit, min], k) => db.prepare('INSERT INTO control_items (list_id, name, unit, min_qty, position) VALUES (?,?,?,?,?)').run(id, name, unit, min, (k + 1) * 10));
+      l.items.forEach(([name, unit, min, o = {}], k) => db.prepare(`INSERT INTO control_items (list_id, name, unit, min_qty, position, supplier, critical, urgent_below, article_no, pack_info)
+        VALUES (?,?,?,?,?,?,?,?,?,?)`).run(id, name, unit, min, (k + 1) * 10, o.sup ?? null, o.crit ? 1 : 0, o.urgent ?? null, o.art ?? null, o.pack ?? null));
     });
   });
 }
@@ -154,6 +184,8 @@ export function runControlReminders(db, branchId, now = new Date(), notify) {
       : `Überfällig: Kontrolle „${r.name}“ war um ${time} Uhr fällig. Bitte jetzt erledigen.`;
     sent += notify(db, branchId, 'control', msg, ref, s.to === 'staff' ? r.assigned_to : null, s.to) ? 1 : 0;
   }
+  sent += escalateZeroAlerts(db, branchId, now, notify);
+  purgeHygiene(db, now);
   return sent;
 }
 
@@ -197,7 +229,7 @@ export function registerControls({ route, db, needUser, needBranch, HttpError, b
     const hours = Number(setting(db, r.branch_id, 'marinade_use_within_hours', '')) || null;
     return { ...summary(r), photo_required: !!r.photo_required, temperature: r.temperature, note: r.note, media_id: r.media_id, review_note: r.review_note,
       use_within_hours: hours, temp_max: Number(setting(db, r.branch_id, 'marinated_temp_max', DEFAULT_TEMP_MAX)),
-      items: items(r.list_id).map((i) => ({ id: i.id, name: i.name, unit: i.unit, min_qty: i.min_qty, qty: lines.get(i.id)?.qty ?? null,
+      items: items(r.list_id).map((i) => ({ id: i.id, name: i.name, unit: i.unit, min_qty: i.min_qty, pack_info: i.pack_info, image_media_id: i.image_media_id, critical: !!i.critical, storage_hint: i.storage_hint, qty: lines.get(i.id)?.qty ?? null,
         reorder: lines.get(i.id)?.reorder ?? null, marinated_at: lines.get(i.id)?.marinated_at ?? null, use_by: lines.get(i.id)?.use_by ?? null })) };
   });
 
@@ -206,6 +238,7 @@ export function registerControls({ route, db, needUser, needBranch, HttpError, b
     const r = runRow(ctx.params.id); if (!r) throw notFound();
     const branchId = needBranch(ctx, r.branch_id);
     if (!['open', 'rework'].includes(r.status)) throw new HttpError(409, 'not_open', 'Diese Kontrolle ist bereits abgeschlossen');
+    { const g = workGate(db, u.id, branchId); if (!g.ok) throw new HttpError(403, g.reason, g.message); }
     const lead = can(u, branchId, 'shift_lead', 'manager', 'admin');
     if (r.assigned_to && r.assigned_to !== u.id && !lead) throw new HttpError(403, 'assigned_other', 'Diese Kontrolle ist einer anderen Person zugewiesen');
     if (r.role === 'shift_lead' && !lead) throw new HttpError(403, 'shift_lead_only', 'Diese Kontrolle ist für Schichtführer');
@@ -243,24 +276,24 @@ export function registerControls({ route, db, needUser, needBranch, HttpError, b
     if (r.photo_required && !media) throw bad('photo_required', 'Foto ist Pflicht');
     const now = new Date();
     const onTime = now <= new Date(r.due_at);
-    const below = [];
+    let alerts = [];
     tx(db, () => {
       db.prepare('DELETE FROM control_run_lines WHERE run_id = ?').run(r.id);
       const ins = db.prepare('INSERT INTO control_run_lines (run_id, item_id, qty, reorder, marinated_at, use_by) VALUES (?,?,?,?,?,?)');
       for (const p of parsed) {
-        const reorder = p.i.min_qty == null ? null : p.qty < p.i.min_qty ? 1 : 0;
-        if (reorder) below.push(`${p.i.name} (${p.qty}/${p.i.min_qty} ${p.i.unit})`);
+        const reorder = p.i.min_qty == null ? (p.qty === 0 ? 1 : null) : p.qty < p.i.min_qty ? 1 : 0;
         ins.run(r.id, p.i.id, p.qty, reorder, p.marinated_at, p.use_by ?? null);
       }
       const upd = db.prepare(`UPDATE control_runs SET status = 'done', completed_by = ?, completed_at = ?, on_time = ?, temperature = ?, temp_alarm = ?, media_id = ?, note = ?,
         assigned_to = COALESCE(assigned_to, ?) WHERE id = ? AND status IN ('open','rework')`)
         .run(u.id, now.toISOString(), onTime ? 1 : 0, temperature, tempAlarm ? 1 : 0, media ?? null, String(ctx.body.note || '').slice(0, 300) || null, u.id, r.id);
       if (!upd.changes) throw new HttpError(409, 'not_open', 'Diese Kontrolle ist bereits abgeschlossen');
-      if (below.length) notify(db, branchId, 'control', `Unter Mindestbestand (${r.name}): ${below.join(', ')}`, `ctl:${r.id}:below`);
       if (tempAlarm) notify(db, branchId, 'temperature', `TEMPERATUR ZU HOCH: ${r.name} – ${temperature} °C (Höchstwert ${tempMax} °C), eingetragen von ${u.display_name}. Sofort prüfen und nach freigegebenem Verfahren handeln.`, `ctl:${r.id}:temp`);
-      audit(db, { actor: u.id, branch: branchId, action: 'control_done', entity: 'control_run', id: r.id, payload: { on_time: onTime, below: below.length } });
+      audit(db, { actor: u.id, branch: branchId, action: 'control_done', entity: 'control_run', id: r.id, payload: { on_time: onTime } });
     });
-    return { ok: true, on_time: onTime, below, temp_alarm: !!tempAlarm, temp_max: tempMax };
+    alerts = evaluateStock(db, { branchId, runId: r.id, userId: u.id, entries: parsed.map((p) => ({ item: p.i, qty: p.qty })), notify });
+    const below = alerts.map((a) => `${a.item.name} (${a.qty}${a.item.min_qty != null ? '/' + a.item.min_qty : ''} ${a.item.unit})`);
+    return { ok: true, on_time: onTime, below, critical: alerts.filter((a) => a.level === 'zero').map((a) => a.item.name), temp_alarm: !!tempAlarm, temp_max: tempMax };
   });
 
   route('POST', '/api/controls/runs/:id/review', (ctx) => {
@@ -308,13 +341,36 @@ export function registerControls({ route, db, needUser, needBranch, HttpError, b
         WHERE x2.item_id = x.item_id AND r2.status = 'done' ORDER BY r2.completed_at DESC LIMIT 1) ORDER BY l.position, i.position`).all(branchId);
     const lists = db.prepare('SELECT * FROM control_lists WHERE branch_id = ? ORDER BY position').all(branchId).map((l) => ({
       ...l, active: !!l.active, photo_required: !!l.photo_required, marinated: !!l.marinated,
-      items: db.prepare('SELECT id, name, unit, min_qty, active FROM control_items WHERE list_id = ? ORDER BY position, id').all(l.id) }));
+      items: db.prepare('SELECT id, name, unit, min_qty, active, supplier, critical, urgent_below, target_qty, article_no, pack_info, storage_hint, image_media_id FROM control_items WHERE list_id = ? ORDER BY position, id').all(l.id) }));
     const staff = db.prepare(`SELECT DISTINCT u.id, u.display_name FROM memberships m JOIN users u ON u.id = m.user_id AND u.active = 1
       WHERE m.branch_id = ? AND m.role IN ('employee','shift_lead') ORDER BY u.display_name`).all(branchId);
     return { date, runs: runs.map(summary), below, lists, staff, escalation: escalationRules(db, branchId),
       missing_min: lists.reduce((n, l) => n + l.items.filter((i) => i.active && i.min_qty == null).length, 0),
       use_within_hours: Number(setting(db, branchId, 'marinade_use_within_hours', '')) || null,
       temp_max: Number(setting(db, branchId, 'marinated_temp_max', DEFAULT_TEMP_MAX)), temp_source: setting(db, branchId, 'marinated_temp_source', DEFAULT_TEMP_SOURCE) };
+  });
+
+  route('GET', '/api/controls/lists', (ctx) => {
+    needUser(ctx);
+    const branchId = needBranch(ctx, ctx.query.get('branch'));
+    return db.prepare('SELECT id, name, marinated FROM control_lists WHERE branch_id = ? AND active = 1 ORDER BY position').all(branchId);
+  });
+
+  // Zusätzliche Kontrolle jederzeit (sofort ausgewertet), z. B. wenn ein Artikel knapp wirkt
+  route('POST', '/api/controls/lists/:id/extra', (ctx) => {
+    const u = needUser(ctx);
+    const l = db.prepare('SELECT * FROM control_lists WHERE id = ?').get(Number(ctx.params.id)); if (!l) throw notFound();
+    const branchId = needBranch(ctx, l.branch_id);
+    if (!l.active) throw bad('inactive');
+    const date = berlinDate();
+    const slot = 100 + db.prepare('SELECT COUNT(*) n FROM control_runs WHERE list_id = ? AND due_date = ? AND slot >= 100').get(l.id, date).n;
+    if (slot > 120) throw new HttpError(429, 'too_many', 'Zu viele Zusatzkontrollen heute');
+    const due = new Date(Date.now() + 30 * 60000);
+    const hhmm = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit', hour12: false }).format(due);
+    const id = Number(db.prepare("INSERT INTO control_runs (list_id, branch_id, due_date, slot, due_time, due_at, assigned_to, assignment_mode) VALUES (?,?,?,?,?,?,?, 'manager')")
+      .run(l.id, branchId, date, slot, hhmm, due.toISOString(), u.id).lastInsertRowid);
+    audit(db, { actor: u.id, branch: branchId, action: 'control_extra', entity: 'control_run', id, payload: { list: l.id } });
+    return { id };
   });
 
   route('PUT', '/api/controls/lists/:id', (ctx) => {
@@ -348,7 +404,17 @@ export function registerControls({ route, db, needUser, needBranch, HttpError, b
     if (!unit) throw bad('unit');
     let min = i.min_qty;
     if (b.min_qty !== undefined) { min = b.min_qty === '' || b.min_qty === null ? null : Number(b.min_qty); if (min != null && (!Number.isFinite(min) || min < 0)) throw bad('min_qty', 'Mindestwert 0 oder größer, leer = offen'); }
-    db.prepare('UPDATE control_items SET unit = ?, min_qty = ?, active = ? WHERE id = ?').run(unit, min, b.active != null ? (b.active ? 1 : 0) : i.active, i.id);
+    const optNum = (v, cur, key) => { if (v === undefined) return cur; if (v === '' || v === null) return null; const n = Number(v); if (!Number.isFinite(n) || n < 0) throw bad(key); return n; };
+    const urgent = optNum(b.urgent_below, i.urgent_below, 'urgent_below'), target = optNum(b.target_qty, i.target_qty, 'target_qty');
+    const txt = (v, cur, n) => (v === undefined ? cur : String(v).trim().slice(0, n) || null);
+    let image = i.image_media_id;
+    if (b.image_media_id !== undefined) {
+      if (b.image_media_id === null || b.image_media_id === '') image = null;
+      else { const m = db.prepare("SELECT id FROM media WHERE id = ? AND branch_id = ? AND purged_at IS NULL").get(Number(b.image_media_id), branchId); if (!m) throw bad('image'); image = m.id; }
+    }
+    db.prepare(`UPDATE control_items SET unit = ?, min_qty = ?, active = ?, supplier = ?, critical = ?, urgent_below = ?, target_qty = ?, article_no = ?, pack_info = ?, storage_hint = ?, image_media_id = ? WHERE id = ?`)
+      .run(unit, min, b.active != null ? (b.active ? 1 : 0) : i.active, txt(b.supplier, i.supplier, 80), b.critical != null ? (b.critical ? 1 : 0) : i.critical,
+        urgent, target, txt(b.article_no, i.article_no, 40), txt(b.pack_info, i.pack_info, 120), txt(b.storage_hint, i.storage_hint, 300), image, i.id);
     audit(db, { actor: u.id, branch: branchId, action: 'control_item_edit', entity: 'control_item', id: i.id, payload: { unit, min } });
     return { ok: true };
   });

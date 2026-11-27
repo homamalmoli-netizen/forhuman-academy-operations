@@ -811,6 +811,109 @@ const MIGRATIONS = [
   `
   ALTER TABLE control_runs ADD COLUMN temp_alarm INTEGER NOT NULL DEFAULT 0;
   `,
+  // 14: Produktdaten je Artikel (Lieferant, zeitkritisch, Gebinde, Artikelnummer, dringende Schwelle, Zielbestand, Bildfeld),
+  //     Bestandsalarme mit Bestätigung, einfache Nachbestellungen mit (Teil-)Lieferung – ohne Preise, ohne automatische Bestellung.
+  `
+  ALTER TABLE control_items ADD COLUMN supplier TEXT;
+  ALTER TABLE control_items ADD COLUMN critical INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE control_items ADD COLUMN urgent_below REAL CHECK (urgent_below IS NULL OR urgent_below >= 0);
+  ALTER TABLE control_items ADD COLUMN target_qty REAL CHECK (target_qty IS NULL OR target_qty >= 0);
+  ALTER TABLE control_items ADD COLUMN article_no TEXT;
+  ALTER TABLE control_items ADD COLUMN pack_info TEXT;
+  ALTER TABLE control_items ADD COLUMN image_media_id INTEGER REFERENCES media(id);
+  ALTER TABLE control_items ADD COLUMN storage_hint TEXT;
+  CREATE TABLE stock_alerts (
+    id INTEGER PRIMARY KEY,
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    item_id INTEGER NOT NULL REFERENCES control_items(id),
+    run_id INTEGER REFERENCES control_runs(id),
+    level TEXT NOT NULL CHECK (level IN ('below','urgent','zero')),
+    qty REAL NOT NULL,
+    min_qty REAL,
+    shortfall REAL,
+    reported_by INTEGER REFERENCES users(id),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','acknowledged','resolved')),
+    ack_by INTEGER REFERENCES users(id),
+    ack_at TEXT,
+    resolved_at TEXT
+  );
+  CREATE INDEX idx_alerts_open ON stock_alerts(branch_id, status);
+  CREATE TABLE stock_orders (
+    id INTEGER PRIMARY KEY,
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    item_id INTEGER NOT NULL REFERENCES control_items(id),
+    supplier TEXT,
+    qty_ordered REAL NOT NULL CHECK (qty_ordered > 0),
+    unit TEXT NOT NULL,
+    ordered_on TEXT NOT NULL,
+    expected_on TEXT,
+    ordered_by INTEGER NOT NULL REFERENCES users(id),
+    status TEXT NOT NULL DEFAULT 'ordered' CHECK (status IN ('ordered','partial','received','cancelled')),
+    qty_received REAL NOT NULL DEFAULT 0,
+    note TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  );
+  CREATE TABLE stock_order_receipts (
+    id INTEGER PRIMARY KEY,
+    order_id INTEGER NOT NULL REFERENCES stock_orders(id),
+    qty REAL NOT NULL CHECK (qty > 0),
+    stock_after REAL NOT NULL CHECK (stock_after >= 0),
+    received_by INTEGER NOT NULL REFERENCES users(id),
+    received_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    note TEXT
+  );
+  `,
+  // 15: Einarbeitungs-Freigabe und täglicher Hygiene-Check (Antworten werden nach Aufbewahrungsfrist gelöscht).
+  `
+  CREATE TABLE work_releases (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    released_by INTEGER NOT NULL REFERENCES users(id),
+    released_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    prior_activity INTEGER NOT NULL DEFAULT 0,
+    note TEXT,
+    revoked_at TEXT,
+    UNIQUE (user_id, branch_id),
+    CHECK (user_id <> released_by)
+  );
+  CREATE TABLE hygiene_checks (
+    id INTEGER PRIMARY KEY,
+    branch_id INTEGER NOT NULL REFERENCES branches(id),
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    work_date TEXT NOT NULL,
+    shift TEXT NOT NULL CHECK (shift IN ('open','run','close')),
+    answers TEXT,                              -- JSON Ja/Nein; nach Aufbewahrungsfrist NULL
+    all_ok INTEGER NOT NULL,
+    review_status TEXT NOT NULL DEFAULT 'none' CHECK (review_status IN ('none','pending','cleared','blocked')),
+    reviewed_by INTEGER REFERENCES users(id),
+    reviewed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    UNIQUE (branch_id, user_id, work_date, shift)
+  );
+  `,
+  // 16: Reinigungsmittel-Stamm – fachliche Angaben nur aus Etikett/Sicherheitsdatenblatt, sichtbar erst nach Freigabe.
+  `
+  CREATE TABLE cleaning_products (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    manufacturer TEXT,
+    product_url TEXT CHECK (product_url IS NULL OR product_url LIKE 'https://%'),
+    article_no TEXT,
+    application TEXT,
+    dosage TEXT,
+    contact_time TEXT,
+    ppe TEXT,
+    material_notes TEXT,
+    sds_url TEXT CHECK (sds_url IS NULL OR sds_url LIKE 'https://%'),
+    sop_code TEXT,
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','approved')),
+    approved_by INTEGER REFERENCES users(id),
+    approved_at TEXT,
+    CHECK (status <> 'approved' OR (dosage IS NOT NULL AND contact_time IS NOT NULL AND ppe IS NOT NULL AND application IS NOT NULL AND sds_url IS NOT NULL))
+  );
+  `,
 ];
 
 export function openDb(file = ':memory:') {

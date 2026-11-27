@@ -18,6 +18,9 @@ import { registerAssign, autoAssign, shiftCandidates } from './assign.js';
 import { registerAccounts, certStatus } from './accounts.js';
 import { registerTraining } from './training.js';
 import { registerControls, seedControls } from './controls.js';
+import { registerStock } from './stock.js';
+import { registerReadiness, workGate } from './readiness.js';
+import { registerGuides } from './guides.js';
 
 export const LANGS = ['de', 'ar', 'en', 'tr'];
 const SHIFTS = ['open', 'run', 'close'];
@@ -249,7 +252,7 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
     const u = needUser(ctx);
     const branchId = needBranch(ctx, ctx.query.get('branch'));
     const purpose = ctx.query.get('purpose') || 'evidence';
-    if (!['evidence', 'problem', 'goods', 'oil', 'receipt', 'certificate'].includes(purpose)) throw bad('purpose');
+    if (!['evidence', 'problem', 'goods', 'oil', 'receipt', 'certificate', 'product'].includes(purpose)) throw bad('purpose');
     const buf = await readBody(ctx.req, 8 * 1024 * 1024);
     const mime = sniffMime(buf);
     if (!mime || (mime === 'application/pdf' && !['receipt', 'certificate'].includes(purpose))) throw bad('file_type', 'Nur JPG, PNG oder WEBP (Beleg/Nachweis auch PDF)');
@@ -286,6 +289,9 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
     const shift = ctx.query.get('shift');
     if (!SHIFTS.includes(shift)) throw bad('shift');
     const date = berlinDate();
+    // Serverseitige Sperre: ohne Freigabe bzw. Hygiene-Check keine regulären Aufgaben (Lernbereiche bleiben offen)
+    const gate = workGate(db, u.id, branchId, shift, date);
+    if (!gate.ok) return { locked: true, gate, next: null, tasks: [], personal: [], team_open: [] };
     generateTasks(db, branchId, date);
     runReminders(db, branchId, date);
     const dist = autoAssign(db, branchId, date, shift, notify);
@@ -343,6 +349,7 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
     if (!row) throw notFound();
     const branchId = needBranch(ctx, row.branch_id);
     if (!['open', 'rework'].includes(row.status)) throw new HttpError(409, 'not_open', 'Aufgabe ist nicht offen');
+    { const g = workGate(db, u.id, branchId, row.shift); if (!g.ok) throw new HttpError(403, g.reason, g.message); }
     if (row.required_course_id && !qualification(db, u.id, row.required_course_id, branchId).ok) throw new HttpError(403, 'not_qualified', 'Schulung oder praktische Freigabe fehlt');
     if (!stationAccess(db, u, row.station_id, branchId)) throw new HttpError(403, 'not_certified', 'Für diese Station nicht freigegeben');
     if (row.role === 'shift_lead' && !can(u, branchId, 'shift_lead', 'manager', 'admin')) throw new HttpError(403, 'shift_lead_only', 'Diese Aufgabe ist für Schichtführer');
@@ -563,7 +570,7 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
         stock_below_min: stockOf(db, branchId).filter((s) => s.below_min).length,
         unknown_codes: db.prepare("SELECT COUNT(*) n FROM unknown_codes WHERE branch_id = ? AND status = 'open'").get(branchId).n,
         oil: db.prepare('SELECT * FROM fryers WHERE branch_id = ?').all(branchId).map((f) => ({ id: f.id, name: f.name, ...oilStatus(db, f) })),
-        notifications: db.prepare("SELECT * FROM notifications WHERE branch_id = ? AND audience = 'manager' ORDER BY id DESC LIMIT 10").all(branchId),
+        notifications: db.prepare("SELECT * FROM notifications WHERE branch_id = ? AND (audience = 'manager' OR (audience = 'admin' AND user_id = ?)) ORDER BY CASE kind WHEN 'critical' THEN 0 ELSE 1 END, id DESC LIMIT 12").all(branchId, u.id),
         ...stationDashboard(db, branchId),
         inventory: inventoryStatus(db, branchId, date),
         daily: dailyStatus(db, branchId, date),
@@ -991,7 +998,10 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
   registerAssign({ route, db, needUser, needBranch, HttpError, bad, notFound, notify });
   registerAccounts({ route, db, needUser, needBranch, needAdmin, HttpError, bad, notFound, notify });
   registerTraining({ route, db, needUser, needBranch, needAdmin, HttpError, bad, notFound });
-  registerControls({ route, db, needUser, needBranch, HttpError, bad, notFound, can, mediaInBranch });
+  const { notify: ctlNotify } = registerControls({ route, db, needUser, needBranch, HttpError, bad, notFound, can, mediaInBranch });
+  registerStock({ route, db, needUser, needBranch, HttpError, bad, notFound, notify: ctlNotify, SEC_HEADERS });
+  registerReadiness({ route, db, needUser, needBranch, HttpError, bad, notFound, notify: ctlNotify });
+  registerGuides({ route, db, needUser, needBranch, needAdmin, HttpError, bad, notFound });
   route('PATCH', '/api/courses/:id', (ctx) => {
     const a = needAdmin(ctx);
     const c = db.prepare('SELECT * FROM courses WHERE id = ?').get(Number(ctx.params.id));

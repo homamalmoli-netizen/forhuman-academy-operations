@@ -338,3 +338,19 @@ a.small { text-decoration: none; }
 .ctl-list .ctl-item.below { background: #fff4f2; }
 .ctl-name small { display: block; }
 .ctl-sub { grid-column: 1 / -1; font-size: .9rem; }
+
+.alert-row.zero { border-color: var(--red, #b3121c); background: #fde8e8; }
+.alert-row.urgent { border-color: #c45500; background: #fff1e6; }
+.ctl-name .thumb { width: 48px; height: 48px; object-fit: cover; border-radius: 8px; float: inline-start; margin-inline-end: 8px; }
+.extra-list { display: grid; gap: 8px; }
+.extra-list button { text-align: start; justify-content: flex-start; }
+
+.lock-card .ready-item { padding: 8px 0; border-bottom: 1px solid var(--line, #eee); }
+.lock-card .ready-item.ok { opacity: .7; }
+fieldset.yn { display: block; border: 0; border-bottom: 1px solid var(--line, #eee); padding: 10px 0; margin: 0; min-width: 0; }
+fieldset.yn legend { display: block; width: 100%; padding: 0 0 6px; font-weight: 700; }
+.yn-opts { display: flex; gap: 8px; }
+.yn-opts .option { flex: 1 1 0; margin: 0 !important; min-width: 0; }
+.facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 10px 0; }
+.facts dt { font-weight: 700; }
+.facts dd { margin: 0; }

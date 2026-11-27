@@ -173,6 +173,7 @@ async function viewShift() {
   let d;
   try { d = await get(`/api/shift/next?${qs({ branch: S.branch, shift: S.shift, lang: S.lang })}`); }
   catch (e) { return render(__seq, `<div class="segs">${shiftBtns}</div>${errorBox(e)}`); }
+  if (d.locked) return render(__seq, `<div class="segs">${shiftBtns}</div>${await lockedCard(d.gate)}`);
   const pct = d.total ? Math.round((d.done / d.total) * 100) : 0;
   const mine = await get(`/api/my-stations?${qs({ branch: S.branch, shift: S.shift, lang: S.lang })}`).catch(() => []);
   const stationHead = mine.length
@@ -205,16 +206,66 @@ async function viewShift() {
   render(__seq, `<div class="segs">${shiftBtns}</div>${presence}${controls}${progress}${trainings}${body}${blocked}`);
 }
 
+// --- Sperre: Einarbeitung / Hygiene-Check ---------------------------------------------------
+async function lockedCard(gate) {
+  if (gate.reason === 'not_released') {
+    const r = await get(`/api/readiness/me?branch=${S.branch}`);
+    const link = { ifsg43: '#/welcome', employer_instruction: '#/welcome', onboarding: '#/handbook', trainings: '#/learn', annual_hygiene: '#/welcome' };
+    return `<section class="card lock-card"><h1>${icon('lock')} ${esc(tr('locked_title'))}</h1><p>${esc(tr('locked_intro'))}</p>
+      <ul class="plain">${r.items.map((i) => `<li class="ready-item ${i.ok ? 'ok' : ''}">${icon(i.ok ? 'check' : 'warn')} <a href="${link[i.key]}">${esc(i.label)}</a>
+        ${i.open?.length ? `<br><small>${i.open.map(esc).join(', ')}</small>` : ''}${!i.blocking && !i.ok ? ' <small>(Hinweis)</small>' : ''}</li>`).join('')}</ul>
+      ${r.ready ? `<p class="banner">${esc(tr('wait_release'))}</p>` : ''}</section>`;
+  }
+  if (gate.reason === 'hygiene_check_required') {
+    const items = ['clothes', 'shoes', 'hair', 'beard', 'nails', 'no_polish', 'jewelry', 'hands', 'wounds', 'no_ban', 'private_items', 'rules'];
+    return `<form data-submit="hygiene" class="card form"><h1>${icon('shield')} ${esc(tr('hygiene_title'))}</h1><p class="note">${esc(tr('hygiene_intro'))}</p>
+      ${items.map((k) => `<fieldset class="yn"><legend>${esc(tr('hy_' + k))}</legend><div class="yn-opts">
+        <label class="option"><input type="radio" name="${k}" value="yes" required><span>${esc(tr('yes'))}</span></label>
+        <label class="option"><input type="radio" name="${k}" value="no"><span>${esc(tr('no'))}</span></label></div></fieldset>`).join('')}
+      <button class="primary block">${icon('check')} ${esc(tr('send'))}</button></form>`;
+  }
+  return `<section class="card lock-card"><h1>${icon('shield')} ${esc(tr('hygiene_title'))}</h1><p class="banner">${esc(gate.message)}</p></section>`;
+}
+
 // --- Kontrolllisten (Ist-Mengen, keine Warenwirtschaft) ------------------------------------
 async function viewControls() {
   const __seq = renderSeq;
   let d;
   try { d = await get(`/api/controls/mine?branch=${S.branch}`); } catch (e) { return render(__seq, errorBox(e)); }
+  const lists = await get(`/api/controls/lists?branch=${S.branch}`).catch(() => []);
   render(__seq, `<h1 class="page-title">${icon('box')} ${esc(tr('my_controls'))}</h1>
+    <a class="secondary block" href="#/receive">${icon('scan')} ${esc(tr('goods_in'))}</a>
     ${d.runs.length ? `<div class="course-list">${d.runs.map((r) => `<a class="course" href="#/control/${r.id}">${icon(r.marinated ? 'prep' : 'box', 'big')}
       <div><b>${esc(r.list)}</b><small>${esc(tr('control_due'))} ${esc(r.due_time)}${r.assigned_name ? ' · ' + esc(r.assigned_name) : ''}</small></div>
       <span class="badge ${['done', 'late_done'].includes(r.state) ? 'ok' : r.state === 'open' ? 'warn' : 'change'}">${esc(tr('ctl_' + r.state))}</span></a>`).join('')}</div>`
-      : `<p class="note">${esc(tr('no_controls'))}</p>`}`);
+      : `<p class="note">${esc(tr('no_controls'))}</p>`}
+    <h2>${icon('add')} ${esc(tr('extra_check'))}</h2><p class="note">${esc(tr('extra_hint'))}</p>
+    <div class="extra-list">${lists.map((l) => `<button class="secondary" data-action="ctl-extra" data-id="${l.id}">${icon(l.marinated ? 'prep' : 'box')} ${esc(l.name)}</button>`).join('')}</div>`);
+}
+
+async function viewChem() {
+  const __seq = renderSeq;
+  let list;
+  try { list = await get(`/api/cleaning-products?branch=${S.branch}`); } catch (e) { return render(__seq, errorBox(e)); }
+  list = list.filter((p) => p.status === 'approved');
+  render(__seq, `<h1 class="page-title">${icon('spray')} ${esc(tr('cleaning_agents'))}</h1>
+    ${list.map((p) => `<section class="card"><h2>${esc(p.name)}</h2>${p.manufacturer ? `<small>${esc(p.manufacturer)}</small>` : ''}
+      <dl class="facts"><dt>${esc(tr('application'))}</dt><dd>${esc(p.application)}</dd><dt>${esc(tr('dosage'))}</dt><dd>${esc(p.dosage)}</dd>
+      <dt>${esc(tr('contact_time'))}</dt><dd>${esc(p.contact_time)}</dd><dt>${esc(tr('ppe'))}</dt><dd>${esc(p.ppe)}</dd>${p.material_notes ? `<dt>!</dt><dd>${esc(p.material_notes)}</dd>` : ''}</dl>
+      <a class="secondary" href="${esc(p.sds_url)}" target="_blank" rel="noopener noreferrer">${icon('book')} ${esc(tr('sds'))}</a></section>`).join('') || `<p class="note">${esc(tr('no_agents'))}</p>`}`);
+}
+
+async function viewReceive() {
+  const __seq = renderSeq;
+  let orders;
+  try { orders = await get(`/api/stock/orders/open?branch=${S.branch}`); } catch (e) { return render(__seq, errorBox(e)); }
+  render(__seq, `<a class="back-link" href="#/controls">${icon('back')} ${esc(tr('my_controls'))}</a><h1 class="page-title">${icon('scan')} ${esc(tr('goods_in'))}</h1>
+    ${orders.map((o) => `<form data-submit="receive" data-id="${o.id}" class="card form">
+      <div class="ctl-name">${o.image_media_id ? `<img class="thumb" src="/api/media/${o.image_media_id}" alt="">` : ''}<b>${esc(o.name)}</b>
+        <small>${esc(tr('ordered'))}: ${o.qty_ordered} ${esc(o.unit)}${o.qty_received ? ` · ${esc(tr('qty_received'))}: ${o.qty_received}` : ''}${o.supplier ? ' · ' + esc(o.supplier) : ''}${o.expected_on ? ' · ' + esc(o.expected_on) : ''}</small></div>
+      <div class="grid2"><label>${esc(tr('qty_received'))} (${esc(o.unit)})<input name="qty" type="number" inputmode="decimal" step="0.01" min="0.01" required></label>
+        <label>${esc(tr('stock_after'))}<input name="stock_after" type="number" inputmode="decimal" step="0.01" min="0" required></label></div>
+      <p class="note">${esc(tr('zero_ok'))}</p><button class="primary block">${icon('check')} ${esc(tr('send'))}</button></form>`).join('') || `<p class="note">${esc(tr('no_orders'))}</p>`}`);
 }
 
 async function viewControl(id) {
@@ -223,8 +274,8 @@ async function viewControl(id) {
   try { r = await get(`/api/controls/runs/${id}`); } catch (e) { return render(__seq, errorBox(e)); }
   const done = ['done', 'late_done'].includes(r.state);
   const nowLocal = () => { const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date()).map((x) => [x.type, x.value])); return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`; };
-  const row = (i) => `<li class="ctl-item ${i.reorder ? 'below' : ''}"><div class="ctl-name"><b>${esc(i.name)}</b>
-      <small>${i.unit === 'offen' ? esc(tr('unit_open')) : esc(i.unit)} · ${i.min_qty == null ? esc(tr('min_open')) : `${esc(tr('min_qty'))} ${i.min_qty}`}</small>
+  const row = (i) => `<li class="ctl-item ${i.reorder ? 'below' : ''}"><div class="ctl-name">${i.image_media_id ? `<img class="thumb" src="/api/media/${i.image_media_id}" alt="">` : ''}<b>${esc(i.name)}</b>${i.critical ? ' <span class="badge warn">!</span>' : ''}
+      <small>${i.unit === 'offen' ? esc(tr('unit_open')) : esc(i.unit)}${i.pack_info ? ' · ' + esc(i.pack_info) : ''} · ${i.min_qty == null ? esc(tr('min_open')) : `${esc(tr('min_qty'))} ${i.min_qty}`}</small>
       ${i.reorder ? `<span class="badge change">${esc(tr('below_min'))}</span>` : ''}</div>
       <input name="qty_${i.id}" type="number" inputmode="decimal" step="0.01" min="0" required value="${i.qty ?? ''}" ${done ? 'disabled' : ''} aria-label="${esc(tr('qty_actual'))} ${esc(i.name)}">
       ${r.marinated ? `<label class="ctl-sub">${esc(tr('marinated_at'))}<input name="mat_${i.id}" type="datetime-local" value="${esc(i.marinated_at || '')}" max="${nowLocal()}" ${done ? 'disabled' : ''}></label>
@@ -661,7 +712,7 @@ function viewMore() {
   render(__seq, `<h1 class="page-title">${icon('dash')} ${esc(tr('tab_more'))}</h1><div class="persona-grid more-grid">
     ${b('#/goods', 'scan', tr('tab_goods'))}${b('#/daily/early', 'sun', tr('daily_inventory') + ' ' + tr('early_shift'))}${b('#/daily/late', 'moon', tr('daily_inventory') + ' ' + tr('late_shift'))}
     ${b('#/inventory', 'box', tr('inventory'))}${b('#/oil', 'oil', tr('tab_oil'))}${b('#/marinade', 'prep', tr('marinade'))}${b('#/pest', 'bug', tr('pest_check'))}${b('#/handbook', 'book', tr('handbook'))}
-    ${b('#/controls', 'box', tr('control_lists'))}${b('#/help', 'book', tr('help_title'))}${b('#/train', 'school', tr('train_areas'))}${b('#/problem/', 'warn', tr('btn_problem'))}</div>`);
+    ${b('#/controls', 'box', tr('control_lists'))}${b('#/chem', 'spray', tr('cleaning_agents'))}${b('#/help', 'book', tr('help_title'))}${b('#/train', 'school', tr('train_areas'))}${b('#/problem/', 'warn', tr('btn_problem'))}</div>`);
 }
 
 // --- Reinigungsplan ------------------------------------------------------------------------
@@ -806,7 +857,7 @@ async function viewOil() {
 function manageNav(active) {
   const items = [['dashboard', 'dash', 'Übersicht'], ['positions', 'store', 'Positionsplan'], ['observe', 'eye', 'Stationscheck'], ['stations', 'star', 'Stationen & Stufen'],
     ['staff', 'lock', 'Mitarbeiter & Zugänge'], ['certs', 'shield', 'Nachweise (§43/METRO)'], ['staffing', 'user', 'Besetzung & Verteilung'], ['week', 'report', 'Wochenbericht'], ['daily', 'box', 'Tagesinventur'], ['onboarding', 'shield', 'Einarbeitung'], ['problems', 'warn', 'Probleme'], ['report', 'report', 'Schichtbericht'], ['templates', 'list', 'Aufgaben-Vorlagen'], ['products', 'history', 'Haltezeiten'],
-    ['controls', 'box', 'Kontrolllisten'], ['academy', 'school', 'Schulungsbereiche'], ['training', 'school', 'Schulung & Freigaben'], ['stock', 'box', 'Bestand & Codes'], ['oil', 'oil', 'Öl-Grenzwerte'], ['audit', 'history', 'Protokoll']];
+    ['readiness', 'shield', 'Einarbeitung & Hygiene'], ['chem', 'spray', 'Reinigungsmittel'], ['controls', 'box', 'Kontrolllisten'], ['reorder', 'box', 'Nachbestellliste'], ['academy', 'school', 'Schulungsbereiche'], ['training', 'school', 'Schulung & Freigaben'], ['stock', 'box', 'Bestand & Codes'], ['oil', 'oil', 'Öl-Grenzwerte'], ['audit', 'history', 'Protokoll']];
   if (S.me.is_admin) items.push(['recipes', 'prep', 'Rezepturen (Marinaden)'], ['sops', 'book', 'Anleitungen (SOP)'], ['users', 'user', 'Benutzer & Filialen']);
   const allowed = { dashboard: true, staffing: isShiftLead(), week: isShiftLead(), daily: isShiftLead(), onboarding: isTrainer(), positions: isShiftLead(), observe: isTrainer(), stations: isShiftLead() || isTrainer(), training: isTrainer() || isManager() };
   const visible = items.filter(([k]) => isManager() || allowed[k]);
@@ -816,7 +867,7 @@ function manageNav(active) {
 async function viewManage(sub = 'dashboard', arg) {
   const __seq = renderSeq;
   try {
-    const fn = { dashboard: mDashboard, controls: mControls, academy: mAcademy, staff: mStaff, certs: mCerts, staffing: mStaffing, week: mWeek, recipes: mRecipes, daily: mDaily, onboarding: mOnboarding, positions: mPositions, observe: mObserve, stations: mStations, products: mProducts, problems: mProblems, report: mReport, templates: mTemplates, training: mTraining, stock: mStock, oil: mOil, audit: mAudit, sops: mSops, users: mUsers }[sub] || mDashboard;
+    const fn = { dashboard: mDashboard, readiness: mReadiness, chem: mChem, controls: mControls, reorder: mReorder, academy: mAcademy, staff: mStaff, certs: mCerts, staffing: mStaffing, week: mWeek, recipes: mRecipes, daily: mDaily, onboarding: mOnboarding, positions: mPositions, observe: mObserve, stations: mStations, products: mProducts, problems: mProblems, report: mReport, templates: mTemplates, training: mTraining, stock: mStock, oil: mOil, audit: mAudit, sops: mSops, users: mUsers }[sub] || mDashboard;
     const html = await fn(arg);
     render(__seq, `${manageNav(sub)}<div class="manage">${html}</div>`);
   } catch (e) { render(__seq, `${manageNav(sub)}${errorBox(e)}`); }
@@ -864,7 +915,7 @@ async function mDaily() {
 }
 
 async function mControls() {
-  const d = await get(`/api/controls?branch=${S.branch}`);
+  const [d, alerts] = await Promise.all([get(`/api/controls?branch=${S.branch}`), get(`/api/stock/alerts?branch=${S.branch}`)]);
   const st = { open: ['offen', 'warn'], overdue: ['überfällig', 'change'], done: ['erledigt', 'ok'], late_done: ['verspätet', 'warn'], rework: ['Nacharbeit', 'change'] };
   const wd = ['', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
   const rhythm = (l) => l.schedule === 'daily' ? 'täglich' : l.schedule === 'weekly' ? `wöchentlich (${wd[l.weekday]})` : `alle ${l.interval_days} Tage ab ${l.start_date}`;
@@ -874,6 +925,10 @@ async function mControls() {
   return `<h1>${icon('box')} Kontrolllisten</h1>
     <p class="note">Einfache Ist-Mengen-Kontrolle als persönliche Aufgabe – keine Buchungen, keine Preise, keine automatischen Bestellungen. Erinnerung: 10 Min. vorher, bei Fälligkeit und +5 Min. an die verantwortliche Person, +10 Min. an die Filialleitung. Kein automatischer Anruf.</p>
     <h2>Heute (${esc(d.date)})</h2><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Liste</th><th>Fällig</th><th>Status</th><th>Verantwortlich</th><th></th></tr></thead><tbody>${d.runs.map(runRow).join('') || '<tr><td colspan="5">Heute keine Kontrolle fällig.</td></tr>'}</tbody></table></div>
+    <h2>${icon('warn')} Offene Bestandsalarme</h2>${alerts.map((a) => `<div class="card alert-row ${a.level}"><b>${a.level === 'zero' ? 'KRITISCH – 0' : a.level === 'urgent' ? 'dringend' : 'unter Minimum'}</b>
+      ${esc(a.name)}: ${a.qty} ${esc(a.unit)}${a.min_qty != null ? ` / min. ${a.min_qty} · Fehlmenge ${a.shortfall}` : ' · Minimum offen'}<br><small>${esc(a.reported_name || '')} · ${fmtTime(a.created_at)}${a.ack_name ? ` · bestätigt von ${esc(a.ack_name)}` : ''}</small>
+      ${a.status === 'open' ? `<button class="small primary" data-action="alert-ack" data-id="${a.id}">Bestätigen</button>` : ''}</div>`).join('') || '<p class="note">Keine offenen Alarme.</p>'}
+    <p><a class="secondary" href="#/manage/reorder">${icon('box')} Zur Nachbestellliste</a></p>
     <h2>Unter Mindestbestand (letzte Kontrolle)</h2><ul class="plain">${d.below.map((b) => `<li>${icon('warn')} <b>${esc(b.name)}</b>: ${b.qty} / min. ${b.min_qty} ${esc(b.unit)} <small>(${esc(b.list)}, ${fmtTime(b.completed_at)})</small></li>`).join('') || '<li>Nichts unter Mindestbestand.</li>'}</ul>
     ${d.missing_min ? `<p class="banner">${icon('warn')} ${d.missing_min} Artikel ohne Mindestwert – unten eintragen (leer = offen, wird nicht erfunden).</p>` : ''}
     <h2>Temperatur-Alarm mariniertes Fleisch</h2>
@@ -883,7 +938,7 @@ async function mControls() {
     <h2>Verbrauchsfrist mariniertes Fleisch</h2>
     <form data-submit="ctl-settings" class="form card inline"><label>Stunden (aus freigegebenem HACCP-Plan, leer = offen)<input name="use_within_hours" type="number" min="1" max="168" value="${d.use_within_hours ?? ''}"></label>
       <label>Quelle<input name="source" placeholder="z. B. HACCP-Plan, Version/Datum"></label><button class="primary">Speichern</button></form>
-    <h2>Listen & Artikel</h2>
+    <h2>Listen & Artikel</h2><div class="card">${photoField('product', 'Produktbild aufnehmen')}</div>
     ${d.lists.map((l) => `<details class="card"><summary><b>${esc(l.name)}</b> · ${esc(rhythm(l))} · ${esc(l.due_times)} Uhr${l.active ? '' : ' · inaktiv'}</summary>
       <form data-submit="ctl-list" data-id="${l.id}" class="form"><div class="grid2">
         <label>Rhythmus<select name="schedule"><option value="daily" ${l.schedule === 'daily' ? 'selected' : ''}>täglich</option><option value="weekly" ${l.schedule === 'weekly' ? 'selected' : ''}>wöchentlich</option><option value="interval" ${l.schedule === 'interval' ? 'selected' : ''}>alle N Tage</option></select></label>
@@ -893,10 +948,69 @@ async function mControls() {
         <label class="check"><input type="checkbox" name="photo_required" ${l.photo_required ? 'checked' : ''}> Foto Pflicht</label><label class="check"><input type="checkbox" name="active" ${l.active ? 'checked' : ''}> aktiv</label>
         <button class="primary">Liste speichern</button></form>
       <table class="tbl"><thead><tr><th>Artikel</th><th>Einheit</th><th>Mindestwert</th><th></th></tr></thead><tbody>
-      ${l.items.map((i) => `<tr><td>${esc(i.name)}</td><td colspan="3"><form data-submit="ctl-item" data-id="${i.id}" class="inline"><input name="unit" value="${esc(i.unit)}" aria-label="Einheit" size="8">
-        <input name="min_qty" type="number" step="0.01" min="0" value="${i.min_qty ?? ''}" placeholder="offen" aria-label="Mindestwert" size="6"><button class="small">speichern</button></form></td></tr>`).join('')}</tbody></table>
+      ${l.items.map((i) => `<tr><td>${i.image_media_id ? `<img class="thumb" src="/api/media/${i.image_media_id}" alt="">` : ''}${esc(i.name)}${i.critical ? ' <span class="badge warn">zeitkritisch</span>' : ''}${i.supplier ? ` <small>${esc(i.supplier)}</small>` : ''}</td>
+        <td colspan="3"><details><summary>${esc(i.unit)} · min. ${i.min_qty ?? 'offen'}${i.urgent_below != null ? ` · dringend unter ${i.urgent_below}` : ''}</summary>
+        <form data-submit="ctl-item" data-id="${i.id}" class="form"><div class="grid2"><label>Einheit<input name="unit" value="${esc(i.unit)}"></label>
+        <label>Mindestwert (leer = offen)<input name="min_qty" type="number" step="0.01" min="0" value="${i.min_qty ?? ''}"></label>
+        <label>Dringend unter<input name="urgent_below" type="number" step="0.01" min="0" value="${i.urgent_below ?? ''}"></label><label>Zielbestand<input name="target_qty" type="number" step="0.01" min="0" value="${i.target_qty ?? ''}"></label>
+        <label>Lieferant<input name="supplier" value="${esc(i.supplier || '')}" placeholder="z. B. METRO"></label><label>Artikelnummer (nur verifiziert)<input name="article_no" value="${esc(i.article_no || '')}"></label>
+        <label>Gebinde laut Etikett<input name="pack_info" value="${esc(i.pack_info || '')}"></label></div>
+        <label class="check"><input type="checkbox" name="critical" ${i.critical ? 'checked' : ''}> zeitkritisch</label>
+        <p class="note">Produktbild: oben „Produktbild aufnehmen“, dann hier speichern.</p><button class="small primary">speichern</button></form></details></td></tr>`).join('')}</tbody></table>
       <form data-submit="ctl-item-new" data-id="${l.id}" class="inline"><input name="name" placeholder="Neuer Artikel" required aria-label="Neuer Artikel"><input name="unit" placeholder="Einheit" aria-label="Einheit" size="8"><input name="min_qty" type="number" step="0.01" min="0" placeholder="min." aria-label="Mindestwert" size="6"><button class="small primary">hinzufügen</button></form>
     </details>`).join('')}`;
+}
+
+async function mChem() {
+  if (!S.me.is_admin) return '<p class="note">Reinigungsmittel pflegt der Betreiber.</p>';
+  const list = await get('/api/cleaning-products');
+  const f = (p, k, label, area) => `<label>${label}${area ? `<textarea name="${k}" rows="2">${esc(p[k] || '')}</textarea>` : `<input name="${k}" value="${esc(p[k] || '')}">`}</label>`;
+  return `<h1>${icon('spray')} Reinigungsmittel</h1>
+    <p class="note">Dosierung, Einwirkzeit, Schutzausrüstung und Anwendung nur aus Etikett bzw. Sicherheitsdatenblatt übernehmen – nichts schätzen. Mitarbeiter sehen nur freigegebene Einträge. Jede Änderung setzt den Eintrag auf Entwurf zurück. Anleitungen je Bereich: unter „Anleitungen“ als Entwürfe (Fotos/Videos/Werte ergänzen, dann freigeben).</p>
+    ${list.map((p) => `<details class="card"><summary><b>${esc(p.name)}</b> · <span class="badge ${p.status === 'approved' ? 'ok' : 'warn'}">${p.status === 'approved' ? 'freigegeben' : 'Entwurf'}</span></summary>
+      <form data-submit="chem-edit" data-id="${p.id}" class="form">${f(p, 'name', 'Name')}${f(p, 'manufacturer', 'Hersteller')}${f(p, 'product_url', 'Produktlink (https)')}${f(p, 'article_no', 'Artikelnummer (verifiziert)')}
+        ${f(p, 'application', 'Anwendung', true)}${f(p, 'dosage', 'Dosierung')}${f(p, 'contact_time', 'Einwirkzeit')}${f(p, 'ppe', 'Schutzausrüstung')}${f(p, 'material_notes', 'Materialverträglichkeit / Hinweise', true)}
+        ${f(p, 'sds_url', 'Sicherheitsdatenblatt (https)')}${f(p, 'sop_code', 'Zugehörige Anleitung (Code)')}
+        <div class="row"><button class="primary">Speichern</button>${p.status !== 'approved' ? `<button type="button" class="secondary" data-action="chem-approve" data-id="${p.id}">Freigeben</button>` : ''}</div></form></details>`).join('')}
+    <form data-submit="chem-new" class="form card inline"><input name="name" placeholder="Neues Reinigungsmittel" required aria-label="Name"><input name="manufacturer" placeholder="Hersteller" aria-label="Hersteller"><button class="primary">Hinzufügen</button></form>`;
+}
+
+async function mReadiness() {
+  const d = await get(`/api/readiness?branch=${S.branch}`);
+  const label = { clothes: 'Kleidung', shoes: 'Schuhe', hair: 'Haare', beard: 'Bart', nails: 'Nägel', no_polish: 'Nagellack/künstliche Nägel', jewelry: 'Schmuck', hands: 'Hände', wounds: 'Wunden', no_ban: 'mögliches Tätigkeitsverbot', private_items: 'private Gegenstände', rules: 'Regeln' };
+  const short = { ifsg43: '§43', employer_instruction: 'AG-Belehrung', onboarding: 'Einweisung', trainings: 'Schulungen', annual_hygiene: 'Hygiene 12 M.' };
+  return `<h1>${icon('shield')} Einarbeitung & Hygiene</h1>
+    <p class="note">Reguläre Aufgaben und Kontrolllisten erst nach Freigabe. Lernen, Handbuch und Nachweise bleiben offen. Belehrung nach §43 IfSG vor erster Tätigkeit (höchstens 3 Monate alt), Arbeitgeberbelehrung bei Aufnahme und alle 2 Jahre. Kein Rechtsrat – Fristen bitte mit Fachberatung bestätigen.</p>
+    <form data-submit="readiness-settings" class="form card inline"><label class="check"><input type="checkbox" name="gate_release" ${d.gate_release ? 'checked' : ''}> Sperre bis Freigabe</label>
+      <label class="check"><input type="checkbox" name="gate_hygiene" ${d.gate_hygiene ? 'checked' : ''}> Hygiene-Check vor jeder Schicht</label>
+      <label>Antworten löschen nach (Tagen)<input name="retention_days" type="number" min="1" max="365" value="${d.retention_days}"></label><button class="primary">Speichern</button></form>
+    <h2>Hygiene-Check: Rückfragen (${d.pending.length})</h2>
+    ${d.pending.map((p) => `<form data-submit="hygiene-review" data-id="${p.id}" class="card form"><b>${esc(p.name)}</b> · ${esc(p.work_date)} · ${esc(p.shift)}
+      <p>Nein bei: ${p.no.map((k) => esc(label[k] || k)).join(', ')}</p>
+      ${p.can_clear ? '' : '<p class="banner">Mögliches Tätigkeitsverbot: keine Arbeit mit Lebensmitteln. Klärung nach Vorgabe (IfSG, ggf. Gesundheitsamt).</p>'}
+      <div class="row">${p.can_clear ? '<button class="primary" value="cleared">Geklärt – darf arbeiten</button>' : ''}<button class="danger" value="blocked">Heute nicht mit Lebensmitteln</button></div></form>`).join('') || '<p class="note">Keine offenen Rückfragen.</p>'}
+    <h2>Mitarbeiter</h2><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Name</th>${Object.values(short).map((x) => `<th>${x}</th>`).join('')}<th>Freigabe</th></tr></thead><tbody>
+    ${d.people.map((p) => `<tr><td>${esc(p.display_name)}</td>${p.items.map((i) => `<td class="${i.ok ? 'ok-cell' : ''}">${i.ok ? '✓' : i.blocking ? '✗' : '–'}</td>`).join('')}
+      <td>${p.released ? `✓ <small>${esc(p.release.released_name)}</small><form data-submit="revoke" data-user="${p.id}" class="inline"><input name="note" placeholder="Grund" aria-label="Grund"><button class="small">entziehen</button></form>`
+        : p.ready ? `<form data-submit="release" data-user="${p.id}" class="inline"><label class="check"><input type="checkbox" name="prior_activity"> früher rechtzeitig aufgenommen</label><input name="note" placeholder="Notiz" aria-label="Notiz"><button class="small primary">freigeben</button></form>` : '<small>noch nicht bereit</small>'}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
+async function mReorder() {
+  const d = await get(`/api/stock/reorder?branch=${S.branch}`);
+  const lvl = { zero: ['0 – kritisch', 'change'], urgent: ['dringend', 'change'], below: ['unter Minimum', 'warn'] };
+  const sup = Object.keys(d.groups).sort((a, b) => (a === 'METRO' ? -1 : b === 'METRO' ? 1 : a.localeCompare(b)));
+  return `<h1>${icon('box')} Nachbestellliste</h1>
+    <p class="note">Vorschlag aus der letzten Kontrolle bzw. Bestandsbestätigung: Zielbestand (sonst Minimum) minus Ist minus bereits bestellt. Es wird <b>nichts automatisch bestellt</b>; keine Preise. Eine Bestellung schließt keinen Alarm – erst ein bestätigter Bestand.</p>
+    <a class="secondary" href="/api/stock/reorder?branch=${S.branch}&format=csv">${icon('box')} Einkaufsliste als CSV</a>
+    ${sup.map((g) => `<h2>${esc(g)}</h2>${d.groups[g].map((r) => `<form data-submit="order" data-item="${r.item_id}" class="card form">
+      <div class="ctl-name">${r.image_media_id ? `<img class="thumb" src="/api/media/${r.image_media_id}" alt="">` : ''}<b>${esc(r.name)}</b> <span class="badge ${lvl[r.level][1]}">${lvl[r.level][0]}</span>${r.critical ? ' <span class="badge warn">zeitkritisch</span>' : ''}
+        <small>${esc(r.list)} · Ist ${r.qty} ${esc(r.unit)} · min. ${r.min_qty ?? 'offen'}${r.target_qty != null ? ` · Ziel ${r.target_qty}` : ''}${r.outstanding ? ` · bereits bestellt ${r.outstanding}` : ''}${r.pack_info ? ' · ' + esc(r.pack_info) : ''}${r.article_no ? ' · Art. ' + esc(r.article_no) : ''}</small></div>
+      <div class="grid2"><label>Bestellmenge (${esc(r.unit)})<input name="qty" type="number" step="0.01" min="0.01" value="${r.suggest || ''}" required></label>
+        <label>Lieferant<input name="supplier" value="${esc(r.supplier || '')}"></label><label>Erwartet am<input name="expected_on" type="date"></label></div>
+      <button class="small primary">Als bestellt erfassen</button></form>`).join('')}`).join('') || '<p class="note">Nichts nachzubestellen.</p>'}
+    <h2>Offene Bestellungen</h2><table class="tbl"><thead><tr><th>Artikel</th><th>Menge</th><th>Lieferant</th><th>Status</th><th></th></tr></thead><tbody>
+    ${d.orders.map((o) => `<tr><td>${esc(o.name)}</td><td>${o.qty_received}/${o.qty_ordered} ${esc(o.unit)}</td><td>${esc(o.supplier || '–')}${o.expected_on ? '<br><small>' + esc(o.expected_on) + '</small>' : ''}</td>
+      <td>${o.status === 'partial' ? 'Teillieferung' : 'bestellt'}<br><small>${esc(o.ordered_name)} · ${esc(o.ordered_on)}</small></td><td><button class="small" data-action="order-cancel" data-id="${o.id}">stornieren</button></td></tr>`).join('') || '<tr><td colspan="5">Keine.</td></tr>'}</tbody></table>`;
 }
 
 async function mAcademy(arg) {
@@ -1280,6 +1394,8 @@ async function route() {
     case 'welcome': return viewWelcome();
     case 'controls': return viewControls();
     case 'control': return viewControl(b);
+    case 'receive': return viewReceive();
+    case 'chem': return viewChem();
     case 'train': return b ? viewTrainModule(b) : viewTrain();
     case 'texam': return viewTrainExam(b);
     case 'help': return viewHelp();
@@ -1321,6 +1437,10 @@ document.addEventListener('click', async (ev) => {
     if (A === 'print') return window.print();
     if (A === 'tpl-move') { await post(`/api/templates/${el.dataset.id}/move`, { dir: el.dataset.dir }); return route(); }
     if (A === 'tpl-photo') { await api('PATCH', `/api/templates/${el.dataset.id}`, { requires_photo: el.dataset.val === '1' }); return route(); }
+    if (A === 'chem-approve') { await post(`/api/cleaning-products/${el.dataset.id}/approve`); S.flash = { type: 'ok', text: 'Freigegeben.' }; return route(); }
+    if (A === 'ctl-extra') { const r = await post(`/api/controls/lists/${el.dataset.id}/extra`); location.hash = `#/control/${r.id}`; return; }
+    if (A === 'alert-ack') { await post(`/api/stock/alerts/${el.dataset.id}/ack`); S.flash = { type: 'ok', text: tr('saved') }; return route(); }
+    if (A === 'order-cancel') { await post(`/api/stock/orders/${el.dataset.id}/cancel`); S.flash = { type: 'ok', text: tr('saved') }; return route(); }
     if (A === 'note-read') { await post(`/api/notifications/${el.dataset.id}/read`); return route(); }
     if (A === 'train-start') { const r = await post(`/api/train/modules/${el.dataset.id}/start`, { branch: S.branch, lang: S.lang }); location.hash = `#/texam/${r.attempt_id}`; return; }
     if (A === 'staff-reset') { const r = await post(`/api/staff/${el.dataset.id}/reset`); S.lastInvite = { name: el.dataset.name, ...r }; S.flash = { type: 'ok', text: 'Neuer Code erstellt – altes Passwort ist ungültig.' }; return route(); }
@@ -1436,18 +1556,39 @@ document.addEventListener('submit', async (ev) => {
         const res = await post(`/api/controls/runs/${form.dataset.id}`, { lines, temperature: fd.temperature, media_id: S.photo?.purpose === 'evidence' ? S.photo.id : undefined });
         S.photo = null;
         const parts = [tr('saved')];
+        if (res.critical?.length) parts.push(`${tr('critical_zero')}: ${res.critical.join(', ')}`);
         if (res.temp_alarm) parts.push(`${tr('temp_too_high')} (max. ${res.temp_max} °C)`);
         if (res.below?.length) parts.push(`${tr('below_min')}: ${res.below.join(', ')}`);
-        S.flash = { type: res.temp_alarm ? 'error' : res.below?.length ? 'warn' : 'ok', text: parts.join(' · ') };
+        S.flash = { type: res.temp_alarm || res.critical?.length ? 'error' : res.below?.length ? 'warn' : 'ok', text: parts.join(' · ') };
         location.hash = '#/controls'; return;
       }
       case 'ctl-list': {
         await api('PUT', `/api/controls/lists/${form.dataset.id}`, { schedule: fd.schedule, weekday: fd.weekday, interval_days: fd.interval_days, start_date: fd.start_date, due_times: fd.due_times, photo_required: !!fd.photo_required, active: !!fd.active });
         S.flash = { type: 'ok', text: tr('saved') }; break;
       }
-      case 'ctl-item': await api('PUT', `/api/controls/items/${form.dataset.id}`, { unit: fd.unit, min_qty: fd.min_qty }); S.flash = { type: 'ok', text: tr('saved') }; break;
+      case 'ctl-item': {
+        const body = { unit: fd.unit, min_qty: fd.min_qty, urgent_below: fd.urgent_below, target_qty: fd.target_qty, supplier: fd.supplier, article_no: fd.article_no, pack_info: fd.pack_info, critical: !!fd.critical };
+        if (S.photo?.purpose === 'product') { body.image_media_id = S.photo.id; S.photo = null; }
+        await api('PUT', `/api/controls/items/${form.dataset.id}`, body); S.flash = { type: 'ok', text: tr('saved') }; break;
+      }
       case 'ctl-item-new': await post(`/api/controls/lists/${form.dataset.id}/items`, { name: fd.name, unit: fd.unit, min_qty: fd.min_qty }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'ctl-review': await post(`/api/controls/runs/${form.dataset.id}/review`, { ok: submitter?.value !== 'rework', note: fd.note }); S.flash = { type: 'ok', text: tr('saved') }; break;
+      case 'hygiene': {
+        const answers = Object.fromEntries(['clothes', 'shoes', 'hair', 'beard', 'nails', 'no_polish', 'jewelry', 'hands', 'wounds', 'no_ban', 'private_items', 'rules'].map((k) => [k, fd[k]]));
+        const r = await post('/api/hygiene', { branch: S.branch, shift: S.shift, answers });
+        S.flash = { type: r.all_ok ? 'ok' : 'warn', text: r.all_ok ? tr('saved') : tr('hygiene_intro') }; break;
+      }
+      case 'release': await post(`/api/readiness/${form.dataset.user}/release`, { branch: S.branch, prior_activity: !!fd.prior_activity, note: fd.note }); S.flash = { type: 'ok', text: 'Freigegeben.' }; break;
+      case 'revoke': await post(`/api/readiness/${form.dataset.user}/revoke`, { branch: S.branch, note: fd.note }); S.flash = { type: 'ok', text: 'Freigabe entzogen.' }; break;
+      case 'readiness-settings': await api('PUT', '/api/readiness/settings', { branch: S.branch, gate_release: !!fd.gate_release, gate_hygiene: !!fd.gate_hygiene, retention_days: fd.retention_days }); S.flash = { type: 'ok', text: tr('saved') }; break;
+      case 'hygiene-review': await post(`/api/hygiene/${form.dataset.id}/review`, { decision: submitter?.value }); S.flash = { type: 'ok', text: tr('saved') }; break;
+      case 'chem-edit': await api('PUT', `/api/cleaning-products/${form.dataset.id}`, fd); S.flash = { type: 'ok', text: 'Gespeichert – Eintrag ist wieder Entwurf, bitte freigeben.' }; break;
+      case 'chem-new': await post('/api/cleaning-products', { name: fd.name, manufacturer: fd.manufacturer }); S.flash = { type: 'ok', text: tr('saved') }; break;
+      case 'receive': {
+        const r = await post(`/api/stock/orders/${form.dataset.id}/receive`, { qty: fd.qty, stock_after: fd.stock_after });
+        S.flash = { type: 'ok', text: `${tr('saved')}${r.open_qty ? ` · offen: ${r.open_qty}` : ''}` }; break;
+      }
+      case 'order': await post('/api/stock/orders', { branch: S.branch, item_id: Number(form.dataset.item), qty: fd.qty, supplier: fd.supplier, expected_on: fd.expected_on }); S.flash = { type: 'ok', text: 'Bestellung erfasst – es wird nichts automatisch bestellt.' }; break;
       case 'ctl-temp': await api('PUT', '/api/controls/settings', { branch: S.branch, temp_max: fd.temp_max, temp_source: fd.temp_source }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'ctl-settings': await api('PUT', '/api/controls/settings', { branch: S.branch, use_within_hours: fd.use_within_hours, source: fd.source }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'train-exam': {
