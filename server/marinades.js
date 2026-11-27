@@ -7,11 +7,15 @@ import { stationAccess } from './stations.js';
 
 const round = (v, d = 3) => Math.round(v * 10 ** d) / 10 ** d;
 
+// 14 Hauptallergene nach Verordnung (EU) Nr. 1169/2011, Anhang II
+export const ALLERGEN_CODES = ['gluten', 'crustaceans', 'eggs', 'fish', 'peanuts', 'soy', 'milk', 'nuts', 'celery', 'mustard', 'sesame', 'sulphites', 'lupin', 'molluscs'];
+const codesOf = (v) => (v.allergen_codes ? v.allergen_codes.split(',').filter(Boolean) : []);
+
 function recipe(db, marinadeId, version) {
   const m = db.prepare('SELECT * FROM marinades WHERE id = ?').get(marinadeId);
   if (!m) return null;
   const v = db.prepare('SELECT * FROM marinade_versions WHERE marinade_id = ? AND version = ?').get(marinadeId, version ?? m.current_version);
-  return { id: m.id, name: m.name, active: !!m.active, version: v.version, ingredients: JSON.parse(v.ingredients), allergens: v.allergens,
+  return { id: m.id, name: m.name, active: !!m.active, version: v.version, ingredients: JSON.parse(v.ingredients), allergens: v.allergens, allergen_codes: codesOf(v),
     tolerance_percent: v.tolerance_percent, use_within_hours: v.use_within_hours, use_source: v.use_source };
 }
 
@@ -32,7 +36,10 @@ function validateRecipe(b, bad) {
   if (hours != null && !(Number.isInteger(hours) && hours >= 1 && hours <= 336)) throw bad('use_within_hours', 'Verwendbar 1–336 Stunden');
   const source = String(b.use_source || '').trim() || null;
   if (hours != null && !source) throw bad('use_source', 'Quelle für die Verwendungsfrist angeben (z. B. HACCP-Plan)');
-  return { name: name.slice(0, 60), ingredients: clean, allergens: String(b.allergens || '').trim().slice(0, 300) || null, tolerance: tol, hours, source };
+  const codes = b.allergen_codes == null ? null : (Array.isArray(b.allergen_codes) ? b.allergen_codes : String(b.allergen_codes).split(',')).map((c) => String(c).trim()).filter(Boolean);
+  if (codes && codes.some((c) => !ALLERGEN_CODES.includes(c))) throw bad('allergen_codes', 'Unbekannter Allergen-Code');
+  return { name: name.slice(0, 60), ingredients: clean, allergens: String(b.allergens || '').trim().slice(0, 300) || null, tolerance: tol, hours, source,
+    codes: codes ? [...new Set(codes)].sort((a, c) => ALLERGEN_CODES.indexOf(a) - ALLERGEN_CODES.indexOf(c)).join(',') : null };
 }
 
 export function registerMarinades({ route, db, needUser, needBranch, needAdmin, HttpError, bad, notFound, notify }) {
@@ -128,6 +135,16 @@ export function registerMarinades({ route, db, needUser, needBranch, needAdmin, 
     return { ok: true };
   });
 
+  // Allergene aus den aktuellen, vom Betreiber gespeicherten Rezepturen – für alle Mitarbeiter lesbar (keine Mengen)
+  route('GET', '/api/allergens', (ctx) => {
+    needUser(ctx);
+    needBranch(ctx, ctx.query.get('branch'));
+    return { codes: ALLERGEN_CODES, marinades: db.prepare('SELECT id FROM marinades WHERE active = 1 ORDER BY name').all().map((m) => {
+      const r = recipe(db, m.id);
+      return { id: r.id, name: r.name, version: r.version, allergen_codes: r.allergen_codes, allergens: r.allergens };
+    }) };
+  });
+
   // --- Rezepturen (nur Betreiber) ---
   route('GET', '/api/admin/marinades', (ctx) => {
     needAdmin(ctx);
@@ -140,8 +157,8 @@ export function registerMarinades({ route, db, needUser, needBranch, needAdmin, 
     if (db.prepare('SELECT 1 FROM marinades WHERE name = ?').get(v.name)) throw new HttpError(409, 'duplicate', 'Marinade mit diesem Namen existiert');
     return tx(db, () => {
       const id = Number(db.prepare('INSERT INTO marinades (name) VALUES (?)').run(v.name).lastInsertRowid);
-      db.prepare('INSERT INTO marinade_versions (marinade_id, version, ingredients, allergens, tolerance_percent, use_within_hours, use_source, created_by) VALUES (?,1,?,?,?,?,?,?)')
-        .run(id, JSON.stringify(v.ingredients), v.allergens, v.tolerance, v.hours, v.source, a.id);
+      db.prepare('INSERT INTO marinade_versions (marinade_id, version, ingredients, allergens, tolerance_percent, use_within_hours, use_source, created_by, allergen_codes) VALUES (?,1,?,?,?,?,?,?,?)')
+        .run(id, JSON.stringify(v.ingredients), v.allergens, v.tolerance, v.hours, v.source, a.id, v.codes);
       audit(db, { actor: a.id, action: 'create', entity: 'marinade', id, payload: { name: v.name } });
       return { id };
     });
@@ -154,8 +171,9 @@ export function registerMarinades({ route, db, needUser, needBranch, needAdmin, 
     const v = validateRecipe({ ...ctx.body, name: m.name }, bad);
     const next = m.current_version + 1;
     tx(db, () => {
-      db.prepare('INSERT INTO marinade_versions (marinade_id, version, ingredients, allergens, tolerance_percent, use_within_hours, use_source, created_by) VALUES (?,?,?,?,?,?,?,?)')
-        .run(m.id, next, JSON.stringify(v.ingredients), v.allergens, v.tolerance, v.hours, v.source, a.id);
+      db.prepare('INSERT INTO marinade_versions (marinade_id, version, ingredients, allergens, tolerance_percent, use_within_hours, use_source, created_by, allergen_codes) VALUES (?,?,?,?,?,?,?,?,?)')
+        .run(m.id, next, JSON.stringify(v.ingredients), v.allergens, v.tolerance, v.hours, v.source, a.id,
+          v.codes ?? db.prepare('SELECT allergen_codes FROM marinade_versions WHERE marinade_id = ? AND version = ?').get(m.id, m.current_version)?.allergen_codes ?? null);
       db.prepare('UPDATE marinades SET current_version = ?, active = ? WHERE id = ?').run(next, ctx.body.active === false ? 0 : 1, m.id);
       audit(db, { actor: a.id, action: 'new_version', entity: 'marinade', id: m.id, payload: { version: next } });
     });

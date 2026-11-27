@@ -8,7 +8,7 @@ function key(db, attemptId) {
   return plan.map((p) => ({ right: p.order.indexOf(0), safety: !!db.prepare('SELECT safety FROM train_questions WHERE id = ?').get(p.q).safety }));
 }
 
-describe('Schulungsbereiche: 10 Bereiche × 3 Stufen, Prüfung, Freigabe, Zertifikat, Hilfe', () => {
+describe('Schulungsbereiche: 12 Bereiche × 3 Stufen, Prüfung, Freigabe, Zertifikat, Hilfe', () => {
   let srv, emp, trainer, admin, ids = {};
   before(async () => {
     srv = await startServer({ demo: true });
@@ -21,10 +21,10 @@ describe('Schulungsbereiche: 10 Bereiche × 3 Stufen, Prüfung, Freigabe, Zertif
   const L1 = () => srv.db.prepare("SELECT m.id FROM train_modules m JOIN train_areas a ON a.id = m.area_id WHERE a.code = 'fleisch' AND m.level = 1").get().id;
   const L2 = () => srv.db.prepare("SELECT m.id FROM train_modules m JOIN train_areas a ON a.id = m.area_id WHERE a.code = 'fleisch' AND m.level = 2").get().id;
 
-  test('Struktur: 10 Bereiche mit je 3 Stufen, Inhalte DE/EN/AR, Stufe 2 gesperrt', async () => {
+  test('Struktur: 12 Bereiche mit je 3 Stufen, Inhalte DE/EN/AR, Stufe 2 gesperrt', async () => {
     const r = await emp.get(`/api/train?branch=${HALLE}&lang=ar`);
     assert.equal(r.status, 200);
-    assert.equal(r.data.length, 10);
+    assert.equal(r.data.length, 12);
     assert.ok(r.data.every((a) => a.levels.length === 3));
     assert.equal(r.data[0].levels[0].state, 'open');
     assert.equal(r.data[0].levels[1].state, 'locked');

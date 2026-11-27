@@ -434,6 +434,7 @@ export function seedDemo(db) {
       empLeuna: insUser.run('demo.mitarbeiter.leuna', 'Demo Mitarbeiter B (fiktiv)', hash, 0).lastInsertRowid,
       leadHalle: insUser.run('demo.schichtfuehrer.halle', 'Demo Schichtführer Halle (fiktiv)', hash, 0).lastInsertRowid,
       empHalle2: insUser.run('demo.mitarbeiter.halle2', 'Demo Mitarbeiter C (fiktiv)', hash, 0).lastInsertRowid,
+      driverHalle: insUser.run('demo.fahrer.halle', 'Demo Fahrer Halle (fiktiv)', hash, 0).lastInsertRowid,
     };
     const halle = idBy(db, 'branches', 'halle'), leuna = idBy(db, 'branches', 'leuna');
     const mem = db.prepare('INSERT INTO memberships (user_id, branch_id, role) VALUES (?,?,?)');
@@ -445,6 +446,11 @@ export function seedDemo(db) {
     mem.run(users.empLeuna, leuna, 'employee');
     mem.run(users.leadHalle, halle, 'shift_lead');
     mem.run(users.empHalle2, halle, 'employee');
+    mem.run(users.driverHalle, halle, 'employee');
+    // Fiktive Fahrzeuge und ein fiktiver Fahrer (Führerscheinkontrolle durch die Leitung dokumentiert – nur Klasse und Datum)
+    const insV = db.prepare('INSERT INTO vehicles (branch_id, label, plate) VALUES (?,?,?)');
+    insV.run(halle, 'DEMO Fahrzeug 1 (fiktiv)', 'DEMO-1'); insV.run(halle, 'DEMO Fahrzeug 2 (fiktiv)', 'DEMO-2'); insV.run(leuna, 'DEMO Fahrzeug 3 (fiktiv)', 'DEMO-3');
+    db.prepare("INSERT INTO driver_profiles (user_id, branch_id, licence_class, licence_checked_on, licence_checked_by, licence_note) VALUES (?,?,'B', date('now'), ?, 'DEMO')").run(users.driverHalle, halle, users.mgrHalle);
     // Bereichsanleitungen (Issue #20) bleiben auch in der Demo gesperrte Entwürfe, bis Fotos/Werte vom Betreiber vorliegen
     db.prepare("UPDATE sop_versions SET status = 'approved', approved_by = ?, approved_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE sop_id NOT IN (SELECT id FROM sops WHERE code LIKE 'bereich-%')").run(users.admin);
 

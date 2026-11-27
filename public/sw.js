@@ -1,7 +1,7 @@
 // Service Worker: speichert nur die App-Oberfläche. API-Anfragen werden NIE zwischengespeichert,
 // damit keine falschen "gespeichert"-Meldungen entstehen.
-const CACHE = 'fh-shell-v1';
-const SHELL = ['/', '/index.html', '/style.css', '/app.js', '/i18n.js', '/icons.js', '/logo.svg', '/shared/codes.js', '/manifest.webmanifest'];
+const CACHE = 'fh-shell-v2';
+const SHELL = ['/', '/index.html', '/style.css', '/app.js', '/i18n.js', '/icons.js', '/drafts.js', '/logo.svg', '/shared/codes.js', '/manifest.webmanifest'];
 self.addEventListener('install', (e) => e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())));
 self.addEventListener('activate', (e) => e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', (e) => {

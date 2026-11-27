@@ -2,6 +2,7 @@
 import { icon } from './icons.js';
 import { t, LANG_NAMES, SPEECH, RTL } from './i18n.js';
 import { classifyCode } from '/shared/codes.js';
+import * as Drafts from './drafts.js';
 
 const $app = document.getElementById('app');
 const S = {
@@ -9,7 +10,9 @@ const S = {
   lang: localStorage.getItem('fh_lang') || 'de',
   branch: Number(localStorage.getItem('fh_branch')) || null,
   shift: localStorage.getItem('fh_shift') || 'open',
-  photo: null, // { id } nach Upload
+  photo: null, // { id } nach Upload – oder { blob, offline: true } ohne Netz
+  photos: {}, // mehrere Fotos je Formular (z. B. Tank + Innenraum)
+  drafts: { pending: 0, rejected: 0 },
   flash: null,
 };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -70,6 +73,8 @@ function shell(content, { tabs = true } = {}) {
   const off = `<div id="offline-banner" class="offline" role="alert" ${navigator.onLine ? 'hidden' : ''}>${esc(tr('offline'))}</div>`;
   // Meldung bleibt sichtbar, bis die Person die nächste Aktion ausführt (kein Verschwinden durch Neuaufbau).
   const flash = S.flash ? `<div class="flash ${S.flash.type}" role="status">${esc(S.flash.text)}</div>` : '';
+  const dr = S.drafts.pending + S.drafts.rejected;
+  const sync = S.me && dr ? `<a class="sync-banner ${S.drafts.rejected ? 'bad' : ''}" href="#/drafts" role="status">${icon('cloud')} ${esc(tr('drafts_unsent'))}: ${dr}${S.drafts.rejected ? ` · ${esc(tr('drafts_rejected'))}: ${S.drafts.rejected}` : ''}</a>` : '';
   const r = location.hash;
   const tab = (href, ic, label) => `<a href="${href}" class="tab ${r.startsWith(href) ? 'on' : ''}">${icon(ic)}<span>${esc(label)}</span></a>`;
   const nav = tabs && S.me ? `<nav class="tabs" aria-label="Navigation">
@@ -83,7 +88,7 @@ function shell(content, { tabs = true } = {}) {
         <select data-change="lang" aria-label="${esc(tr('choose_lang'))}">${Object.keys(LANG_NAMES).map((k) => `<option value="${k}" ${k === S.lang ? 'selected' : ''}>${k.toUpperCase()}</option>`).join('')}</select>
         <button class="icon-btn" data-action="logout" title="${esc(tr('logout'))}" aria-label="${esc(tr('logout'))}">${icon('logout')}</button>
       </div></header>` : '';
-  $app.innerHTML = `${demo}${off}${head}<main id="main" tabindex="-1">${flash}${content}</main>${nav}`;
+  $app.innerHTML = `${demo}${off}${head}${sync}<main id="main" tabindex="-1">${flash}${content}</main>${nav}`;
 }
 
 // Nur das Ergebnis des zuletzt gestarteten Seitenaufbaus anzeigen (verhindert, dass langsame Antworten neuere Eingaben überschreiben)
@@ -120,7 +125,7 @@ function showError(e) {
 function viewStart() {
   const langs = Object.entries(LANG_NAMES).map(([k, v]) => `<button class="lang-btn ${k === S.lang ? 'on' : ''}" data-action="set-lang" data-lang="${k}" lang="${k}">${v}</button>`).join('');
   const demo = S.config.demo ? `<section class="card"><h2>${esc(tr('try_demo_as'))}</h2><div class="persona-grid">
-      ${['employee_halle', 'employee_leuna', 'shift_lead_halle', 'manager_halle', 'manager_leuna', 'trainer', 'admin'].map((p) => `<button class="big-btn" data-action="demo" data-persona="${p}">${icon(p.startsWith('employee') ? 'user' : p === 'admin' ? 'settings' : p === 'trainer' ? 'school' : p.startsWith('shift_lead') ? 'star' : 'dash')}<span>${esc(tr('persona_' + p))}</span></button>`).join('')}
+      ${['employee_halle', 'employee_leuna', 'shift_lead_halle', 'driver_halle', 'manager_halle', 'manager_leuna', 'trainer', 'admin'].map((p) => `<button class="big-btn" data-action="demo" data-persona="${p}">${icon(p.startsWith('employee') ? 'user' : p === 'admin' ? 'settings' : p === 'trainer' ? 'school' : p.startsWith('shift_lead') ? 'star' : p.startsWith('driver') ? 'car' : 'dash')}<span>${esc(tr('persona_' + p))}</span></button>`).join('')}
     </div></section>` : `<section class="card"><h2>${esc(tr('login'))}</h2>
       ${S.config.has_admin ? '' : `<p class="note">${esc(tr('no_admin_yet'))}</p>`}
       <form data-submit="login" class="form">
@@ -154,7 +159,7 @@ function taskCard(n) {
         ${n.requires_photo ? photoField('evidence', tr('photo_required')) : ''}
         <div class="actions">
           ${canSpeak() ? `<button class="act" data-action="speak" data-text="${esc(sayText)}">${icon('speak')}<span>${esc(tr('btn_speak'))}</span></button>` : ''}
-          ${n.sop_id ? `<a class="act" href="#/sop/${n.sop_id}">${icon('book')}<span>${esc(tr('btn_guide'))}</span></a>` : ''}
+          <a class="act" href="#/taskhelp/${n.id}">${icon('help')}<span>${esc(tr('btn_help'))}</span></a>
           ${n.link === 'inventory' ? `<a class="act" href="#/inventory">${icon('box')}<span>${esc(tr('open_inventory'))}</span></a>` : ''}
           ${n.link === 'daily_early' || n.link === 'daily_late' ? `<a class="act" href="#/daily/${n.link === 'daily_early' ? 'early' : 'late'}">${icon('box')}<span>${esc(tr('daily_inventory'))}</span></a>` : ''}
           ${n.link === 'pest_check' ? `<a class="act" href="#/pest">${icon('bug')}<span>${esc(tr('pest_check'))}</span></a>` : ''}
@@ -218,7 +223,7 @@ async function lockedCard(gate) {
   }
   if (gate.reason === 'hygiene_check_required') {
     const items = ['clothes', 'shoes', 'hair', 'beard', 'nails', 'no_polish', 'jewelry', 'hands', 'wounds', 'no_ban', 'private_items', 'rules'];
-    return `<form data-submit="hygiene" class="card form"><h1>${icon('shield')} ${esc(tr('hygiene_title'))}</h1><p class="note">${esc(tr('hygiene_intro'))}</p>
+    return `<form data-submit="hygiene" data-draft class="card form"><h1>${icon('shield')} ${esc(tr('hygiene_title'))}</h1><p class="note">${esc(tr('hygiene_intro'))}</p>
       ${items.map((k) => `<fieldset class="yn"><legend>${esc(tr('hy_' + k))}</legend><div class="yn-opts">
         <label class="option"><input type="radio" name="${k}" value="yes" required><span>${esc(tr('yes'))}</span></label>
         <label class="option"><input type="radio" name="${k}" value="no"><span>${esc(tr('no'))}</span></label></div></fieldset>`).join('')}
@@ -281,7 +286,7 @@ async function viewControl(id) {
       ${r.marinated ? `<label class="ctl-sub">${esc(tr('marinated_at'))}<input name="mat_${i.id}" type="datetime-local" value="${esc(i.marinated_at || '')}" max="${nowLocal()}" ${done ? 'disabled' : ''}></label>
         ${i.use_by ? `<small>${esc(tr('use_by_short'))} ${fmtTime(i.use_by)}</small>` : ''}` : ''}</li>`;
   render(__seq, `<a class="back-link" href="#/controls">${icon('back')} ${esc(tr('my_controls'))}</a>
-    <form data-submit="control" data-id="${r.id}" class="card form"><h1>${icon(r.marinated ? 'prep' : 'box')} ${esc(r.list)}</h1>
+    <form data-submit="control" data-draft data-id="${r.id}" data-label="${esc(r.list)}" class="card form"><h1>${icon(r.marinated ? 'prep' : 'box')} ${esc(r.list)}</h1>
       <p><span class="badge ${done ? 'ok' : r.state === 'open' ? 'warn' : 'change'}">${esc(tr('ctl_' + r.state))}</span> ${esc(tr('control_due'))} <b>${esc(r.due_time)}</b>${r.assigned_name ? ' · ' + esc(r.assigned_name) : ''}</p>
       ${r.review_note ? `<div class="banner">${icon('warn')} ${esc(r.review_note)}</div>` : ''}
       <p class="note">${esc(tr('zero_ok'))}</p>
@@ -298,11 +303,12 @@ async function viewControl(id) {
 
 
 function photoField(purpose, label) {
-  const ready = S.photo && S.photo.purpose === purpose;
+  const p = S.photos[purpose] || (S.photo && S.photo.purpose === purpose ? S.photo : null);
+  const ready = !!p;
   return `<div class="photo-field ${ready ? 'ready' : ''}">
-      <label class="photo-btn">${icon('camera')}<span>${esc(ready ? tr('photo_ok') : label || tr('take_photo'))}</span>
+      <label class="photo-btn">${icon('camera')}<span>${esc(ready ? (p.offline ? tr('photo_offline') : tr('photo_ok')) : label || tr('take_photo'))}</span>
       <input type="file" accept="image/*${purpose === 'receipt' || purpose === 'certificate' ? ',application/pdf' : ''}" ${purpose === 'certificate' ? '' : 'capture="environment"'} data-change="photo" data-purpose="${purpose}" hidden></label>
-      ${ready && S.photo.preview ? `<img class="thumb" src="${S.photo.preview}" alt="">` : ''}</div>`;
+      ${ready && p.preview ? `<img class="thumb" src="${p.preview}" alt="">` : ''}</div>`;
 }
 
 async function completeTask(id) {
@@ -339,8 +345,180 @@ async function viewSop(id) {
       ${!s.translation_reviewed ? `<div class="banner">${esc(tr('translation_unreviewed'))}</div>` : ''}
       <h1>${icon(s.icon)} ${esc(s.title)}</h1><p class="meta">${esc(s.code)} · Version ${s.version}</p>
       ${canSpeak() ? `<button class="act" data-action="speak" data-text="${esc(s.title + '. ' + all)}">${icon('speak')}<span>${esc(tr('btn_speak'))}</span></button>` : ''}
-      <ol class="steps">${s.steps.map((x, i) => `<li><span class="num">${i + 1}</span><span class="step-ico">${icon(x.icon)}</span><p>${esc(x.text)}</p></li>`).join('')}</ol>
+      <ol class="steps">${s.steps.map((x, i) => `<li><span class="num">${i + 1}</span><span class="step-ico">${icon(x.icon)}</span><p>${esc(x.text)}</p>${x.media_id ? `<img class="step-photo" src="/api/media/${x.media_id}" alt="" loading="lazy">` : ''}</li>`).join('')}</ol>
       <button class="secondary" data-action="back">${esc(tr('back'))}</button></section>`);
+}
+
+
+
+// --- Hilfe direkt bei der Aufgabe (DE + AR nebeneinander) -----------------------------------
+const ALLERGENS = ['gluten', 'crustaceans', 'eggs', 'fish', 'peanuts', 'soy', 'milk', 'nuts', 'celery', 'mustard', 'sesame', 'sulphites', 'lupin', 'molluscs'];
+async function viewTaskHelp(id) {
+  const __seq = renderSeq;
+  let h;
+  try { h = await get(`/api/tasks/${id}/help`); } catch (e) { return render(__seq, errorBox(e)); }
+  const col = (L, title, hint, sop) => `<section class="card help-col" lang="${L}" dir="${L === 'ar' ? 'rtl' : 'ltr'}">
+      <small class="lang-tag">${L === 'ar' ? 'العربية' : 'Deutsch'}</small>
+      <h2>${esc(title || '–')}</h2>${hint ? `<p>${esc(hint)}</p>` : ''}
+      ${sop ? `<h3>${icon('book')} ${esc(sop.title)}</h3><ol class="steps">${sop.steps.map((x, i) => `<li><span class="num">${i + 1}</span><span class="step-ico">${icon(x.icon)}</span><p>${esc(x.text)}</p>${x.media_id ? `<img class="step-photo" src="/api/media/${x.media_id}" alt="" loading="lazy">` : ''}</li>`).join('')}</ol>` : ''}
+      ${canSpeak() ? `<button class="act" data-action="speak-lang" data-lang="${L}" data-text="${esc([title, hint, ...(sop ? sop.steps.map((x) => x.text) : [])].filter(Boolean).join('. '))}">${icon('speak')}<span>${esc(tr('btn_speak'))}</span></button>` : ''}</section>`;
+  const sop = h.sop && h.sop.de ? h.sop : null;
+  render(__seq, `<button class="back-link linklike" data-action="back">${icon('back')} ${esc(tr('back'))}</button>
+    <h1 class="page-title">${icon('help')} ${esc(tr('btn_help'))}</h1>
+    ${sop?.safety_review === 'pending' ? `<div class="banner danger">${icon('warn')} ${esc(tr('draft_not_for_use'))}</div>` : ''}
+    ${h.sop && !sop ? `<p class="note">${esc(tr('sop_not_published'))}</p>` : ''}${!h.sop ? `<p class="note">${esc(tr('no_sop_yet'))}</p>` : ''}
+    <div class="help-grid">${col('de', h.task.de.title, h.task.de.hint, sop?.de)}${col('ar', h.task.ar.title || h.task.de.title, h.task.ar.hint, sop?.ar)}</div>
+    ${sop && sop.ar && !sop.ar_reviewed ? `<p class="note">${esc(tr('translation_unreviewed'))}</p>` : ''}
+    ${sop && !sop.ar ? `<p class="note">${esc(tr('no_ar_sop'))}</p>` : ''}
+    <a class="act warn" href="#/problem/${esc(id)}">${icon('warn')}<span>${esc(tr('btn_problem'))}</span></a>`);
+}
+async function viewAllergens() {
+  const __seq = renderSeq;
+  let d;
+  try { d = await get(`/api/allergens?branch=${S.branch}`); } catch (e) { return render(__seq, errorBox(e)); }
+  render(__seq, `<h1 class="page-title">${icon('book')} ${esc(tr('allergens_title'))}</h1>
+    <p class="banner">${esc(tr('allergens_intro'))}</p>
+    ${d.marinades.map((m) => `<section class="card"><h2>${esc(m.name)} <small>v${m.version}</small></h2>
+      ${m.allergen_codes.length ? `<ul class="alg-chips">${m.allergen_codes.map((c) => `<li class="alg-chip">${esc(tr('alg_' + c))}${S.lang !== 'ar' ? ` <span lang="ar" dir="rtl">· ${esc(t('alg_' + c, 'ar'))}</span>` : ''}</li>`).join('')}</ul>` : `<p class="note">${esc(tr('allergens_not_set'))}</p>`}
+      ${m.allergens ? `<p><small>${esc(m.allergens)}</small></p>` : ''}</section>`).join('') || `<p class="note">${esc(tr('allergens_not_set'))}</p>`}
+    <h2>${esc(tr('allergens_all14'))}</h2><ul class="alg-chips">${d.codes.map((c) => `<li class="alg-chip muted">${esc(tr('alg_' + c))}</li>`).join('')}</ul>`);
+}
+
+// --- Offline-Entwürfe ---------------------------------------------------------------------
+async function refreshDrafts() {
+  if (!S.me || !Drafts.available()) { S.drafts = { pending: 0, rejected: 0 }; return []; }
+  const list = await Drafts.listDrafts(S.me.id).catch(() => []);
+  S.drafts = { pending: list.filter((d) => d.status === 'pending').length, rejected: list.filter((d) => d.status === 'rejected').length };
+  return list;
+}
+let syncing = false;
+async function syncNow(manual = false) {
+  if (syncing || !S.me || !Drafts.available()) return;
+  syncing = true;
+  try {
+    const r = await Drafts.syncDrafts(S.me.id, {
+      upload: (blob, purpose, branch) => api('POST', `/api/media?${qs({ branch, purpose })}`, blob, blob.type || 'image/jpeg'),
+      post: (url, body) => post(url, body),
+    });
+    await refreshDrafts();
+    if (r.sent) S.flash = { type: 'ok', text: `${tr('drafts_sent')}: ${r.sent}` };
+    else if (manual && r.pending) S.flash = { type: 'error', text: tr('not_saved_offline') };
+    if (r.sent || r.rejected || manual) route();
+  } finally { syncing = false; }
+}
+/** Abgabe senden; ohne Netz als Entwurf speichern (gilt NICHT als erledigt). photos: { feld: fotoState } */
+async function sendOrDraft({ kind, label, url, body, photos = {} }) {
+  const offlinePhotos = Object.fromEntries(Object.entries(photos).filter(([, p]) => p?.offline).map(([f, p]) => [f, { blob: p.blob, purpose: p.apiPurpose || 'evidence' }]));
+  const full = { ...body };
+  for (const [f, p] of Object.entries(photos)) if (p && !p.offline) full[f] = p.id;
+  const draft = async () => {
+    await Drafts.saveDraft({ user_id: S.me.id, branch: S.branch, kind, label, url, body: full, photos: offlinePhotos });
+    await refreshDrafts();
+    S.flash = { type: 'warn', text: tr('draft_saved') };
+    return { draft: true };
+  };
+  if (Object.keys(offlinePhotos).length && !navigator.onLine) return draft();
+  try {
+    const send = { ...full };
+    for (const [f, p] of Object.entries(offlinePhotos)) send[f] = (await api('POST', `/api/media?${qs({ branch: S.branch, purpose: p.purpose })}`, p.blob, p.blob.type || 'image/jpeg')).id;
+    return await post(url, send);
+  } catch (e) {
+    if (e?.status === 0 && Drafts.available()) return draft();
+    throw e;
+  }
+}
+async function viewDrafts() {
+  const __seq = renderSeq;
+  const list = await refreshDrafts();
+  render(__seq, `<h1 class="page-title">${icon('cloud')} ${esc(tr('drafts_title'))}</h1>
+    <p class="banner">${esc(tr('drafts_intro'))}</p>
+    ${list.length ? `<button class="primary block" data-action="sync-now">${icon('cloud')} ${esc(tr('sync_now'))}</button>
+      <ul class="plain draft-list">${list.map((d) => `<li class="card draft ${d.status}"><b>${esc(d.label)}</b>
+        <small>${esc(tr('draft_saved_at'))} ${fmtTime(d.saved_at)}${Object.keys(d.photos || {}).length ? ` · ${Object.keys(d.photos).length} ${esc(tr('photos'))}` : ''}</small>
+        <span class="badge ${d.status === 'pending' ? 'warn' : 'change'}">${esc(tr(d.status === 'pending' ? 'draft_pending' : 'draft_rejected'))}</span>
+        ${d.error ? `<p class="bad-text">${esc(d.error)}</p><p class="note">${esc(tr('draft_redo'))}</p>` : ''}
+        <button class="secondary small" data-action="draft-discard" data-id="${esc(d.id)}">${esc(tr('draft_discard_btn'))}</button></li>`).join('')}</ul>`
+      : `<p class="note">${esc(tr('drafts_none'))}</p>`}`);
+}
+
+// --- Fahrer & Fahrzeuge ---------------------------------------------------------------------
+const berlinHour = () => Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Berlin', hour: '2-digit', hourCycle: 'h23' }).format(new Date()));
+async function viewDrive() {
+  const __seq = renderSeq;
+  let d;
+  try { d = await get(`/api/drivers/me?branch=${S.branch}`); } catch (e) { return render(__seq, errorBox(e)); }
+  if (!d.driver) return render(__seq, `<h1 class="page-title">${icon('car')} ${esc(tr('drive_title'))}</h1><p class="note">${esc(tr('not_driver'))}</p>`);
+  const sh = S.driveShift || (berlinHour() < 15 ? 'early' : 'late');
+  S.driveShift = sh;
+  const card = (v) => {
+    const x = v.shifts[sh];
+    const status = v.blocked ? ['change', tr('dv_blocked')] : x.ended ? ['ok', tr('dv_done')] : x.started ? ['warn', `${tr('dv_in_use')}: ${x.driver}`] : ['', tr('dv_free')];
+    return `<section class="card vehicle ${v.blocked ? 'blocked' : ''}"><div class="ctl-name">${icon('car', 'big')}<b>${esc(v.label)}</b>${v.plate ? `<small>${esc(v.plate)}</small>` : ''}</div>
+      <span class="badge ${status[0]}">${esc(status[1])}</span>
+      ${v.blocked ? `<p class="bad-text">${icon('warn')} ${esc(tr('dv_blocked_hint'))}${v.blocked_reason ? `: ${esc(v.blocked_reason)}` : ''}</p>` : ''}
+      ${!v.blocked && !x.started && d.licence.ok ? `<a class="primary block" href="#/drive/${v.id}/start">${icon('check')} ${esc(tr('dv_start'))}</a>` : ''}
+      ${x.mine && x.started && !x.ended ? `<a class="primary block" href="#/drive/${v.id}/end">${icon('check')} ${esc(tr('dv_end'))}</a>` : ''}</section>`;
+  };
+  render(__seq, `<h1 class="page-title">${icon('car')} ${esc(tr('drive_title'))}</h1>
+    ${d.licence.ok ? '' : `<div class="banner bad-text">${icon('warn')} ${esc(tr(d.licence.reason === 'licence_due' ? 'licence_due' : 'licence_unchecked'))}</div>`}
+    <div class="segs two"><button class="seg ${sh === 'early' ? 'on' : ''}" data-action="drive-shift" data-shift="early">${icon('sun')}<span>${esc(tr('early_shift'))}</span></button><button class="seg ${sh === 'late' ? 'on' : ''}" data-action="drive-shift" data-shift="late">${icon('moon')}<span>${esc(tr('late_shift'))}</span></button></div>
+    <p class="note">${esc(tr('dv_intro'))}</p>
+    ${d.vehicles.map(card).join('') || `<p class="note">${esc(tr('no_vehicles'))}</p>`}`);
+}
+async function viewDriveCheck(vehicleId, kind) {
+  const __seq = renderSeq;
+  let d;
+  try { d = await get(`/api/drivers/me?branch=${S.branch}`); } catch (e) { return render(__seq, errorBox(e)); }
+  const v = d.vehicles?.find((x) => x.id === Number(vehicleId));
+  if (!v || !['start', 'end'].includes(kind)) return render(__seq, errorBox({ message: tr('error') }));
+  const sh = S.driveShift || (berlinHour() < 15 ? 'early' : 'late');
+  const keys = kind === 'start' ? d.items.start : d.items.end;
+  render(__seq, `<a class="back-link" href="#/drive">${icon('back')} ${esc(tr('drive_title'))}</a>
+    <form data-submit="vehicle" data-draft data-vehicle="${v.id}" data-label="${esc(v.label)}" data-kind="${kind}" data-shift="${sh}" data-keys="${keys.join(',')}" class="card form">
+      <h1>${icon('car')} ${esc(v.label)} · ${esc(tr(kind === 'start' ? 'dv_start' : 'dv_end'))}</h1>
+      <p class="note">${esc(tr(sh === 'early' ? 'early_shift' : 'late_shift'))} · ${esc(tr('dv_yes_ok'))}</p>
+      ${keys.map((k) => `<fieldset class="yn"><legend>${esc(tr('dv_' + k))}${d.items.safety.includes(k) ? ` <span class="badge change">${esc(tr('dv_safety'))}</span>` : ''}</legend><div class="yn-opts">
+        <label class="option"><input type="radio" name="${k}" value="yes" required><span>${esc(tr('yes'))}</span></label>
+        <label class="option"><input type="radio" name="${k}" value="no"><span>${esc(tr('no'))}</span></label></div></fieldset>`).join('')}
+      <label>${esc(tr('dv_fuel'))}<select name="fuel_level"><option value="">–</option>${d.items.fuel.map((f) => `<option value="${f}">${esc(tr('fuel_' + f))}</option>`).join('')}</select></label>
+      ${photoField('fuel', tr('dv_photo_fuel'))}${photoField('interior', tr('dv_photo_interior'))}
+      <label>${esc(tr('dv_note'))}<textarea name="note" rows="2" maxlength="400"></textarea></label>
+      ${kind === 'start' ? `<p class="note">${esc(tr('dv_safety_hint'))}</p>` : ''}
+      <button class="primary block">${icon('check')} ${esc(tr('send'))}</button></form>`);
+}
+
+async function mDrivers() {
+  const d = await get(`/api/drivers?branch=${S.branch}`);
+  const vname = (id) => d.vehicles.find((v) => v.id === id)?.label || id;
+  const LIC = { licence_unchecked: 'Führerscheinkontrolle fehlt', licence_due: 'Führerscheinkontrolle fällig' };
+  return `<h1>${icon('car')} Fahrer & Fahrzeuge</h1>
+    <p class="note">Fahrer machen Start- und Endkontrolle selbst (Tank- und Innenraumfoto). Ein „Nein“ bei Licht, Reifen, Bremsen oder Warnleuchten sperrt das Fahrzeug, bis die Leitung die Behebung einträgt. Gespeichert werden nur Führerscheinklasse, Prüfdatum und prüfende Person – keine Kopie und keine Nummer.</p>
+    ${d.vehicles.filter((v) => v.blocked).map((v) => `<form data-submit="vehicle-unblock" data-id="${v.id}" class="card form alert-row"><b>${icon('warn')} ${esc(v.label)} gesperrt</b>
+      <small>${esc(v.blocked_reason || '')} · ${fmtTime(v.blocked_at)}</small><label>Wie wurde der Mangel behoben?<input name="note" required maxlength="300"></label>
+      <button class="primary">Wieder freigeben</button></form>`).join('')}
+    <h2>Heute (${esc(d.date)})</h2>
+    <ul class="plain">${d.checks.map((c) => `<li>${fmtTime(c.created_at)} · <b>${esc(vname(c.vehicle_id))}</b> · ${c.shift === 'early' ? 'Früh' : 'Spät'} · ${c.kind === 'start' ? 'Start' : 'Ende'} · ${esc(c.display_name)}
+      ${c.fuel_level ? ` · Tank ${esc(tr('fuel_' + c.fuel_level))}` : ''}${c.safety_defect ? ' <span class="badge change">Sicherheitsmangel</span>' : ''}${c.note ? `<br><small>${esc(c.note)}</small>` : ''}
+      <span class="thumbs"><a href="/api/media/${c.fuel_media_id}" target="_blank" rel="noopener">Tank</a> · <a href="/api/media/${c.interior_media_id}" target="_blank" rel="noopener">Innenraum</a></span></li>`).join('') || '<li>Noch keine Kontrolle.</li>'}</ul>
+    <h2>Fahrer</h2>
+    <ul class="plain">${d.drivers.map((p) => `<li>${p.active ? '' : '<s>'}<b>${esc(p.name)}</b>${p.active ? '' : '</s>'} · Klasse ${esc(p.licence_class || '–')} · geprüft ${p.licence_checked_on ? `${esc(p.licence_checked_on)} von ${esc(p.checked_by || '')}` : '–'}
+      ${p.licence.ok ? '<span class="badge ok">OK</span>' : `<span class="badge change">${LIC[p.licence.reason]}</span>`}
+      ${p.active ? ` <button class="secondary small" data-action="driver-off" data-id="${p.user_id}">Austragen</button>` : ''}</li>`).join('') || '<li>Noch keine Fahrer eingetragen.</li>'}</ul>
+    <form data-submit="driver-add" class="card form"><h3>Fahrer eintragen / Führerschein geprüft</h3>
+      <label>Person<select name="user_id" required>${d.staff.map((u) => `<option value="${u.id}">${esc(u.display_name)}</option>`).join('')}</select></label>
+      <div class="grid2"><label>Klasse<input name="licence_class" maxlength="20" placeholder="z. B. B"></label><label>Original gesehen am<input name="licence_checked_on" type="date"></label></div>
+      <label>Notiz (optional, keine Führerscheinnummer)<input name="licence_note" maxlength="200"></label>
+      <p class="note">Ohne Prüfdatum ist die Person eingetragen, kann aber noch keine Fahrzeugkontrolle starten. Eigene Prüfung ist nicht möglich.</p>
+      <button class="primary">Speichern</button></form>
+    <form data-submit="driver-settings" class="card form"><h3>Prüfintervall Führerschein</h3>
+      <label>Alle … Monate erneut prüfen (leer = kein Intervall)<input name="licence_check_months" type="number" min="1" max="36" value="${d.licence_check_months ?? ''}"></label>
+      <p class="note">Das Intervall legt der Betreiber fest – die App gibt keinen Wert vor.</p><button class="primary">Speichern</button></form>
+    <h2>Fahrzeuge</h2>
+    ${d.vehicles.map((v) => `<form data-submit="vehicle-edit" data-id="${v.id}" class="card form"><div class="grid2"><label>Bezeichnung<input name="label" required maxlength="60" value="${esc(v.label)}"></label>
+      <label>Kennzeichen<input name="plate" maxlength="20" value="${esc(v.plate || '')}"></label></div>
+      <label class="check"><input type="checkbox" name="active" ${v.active ? 'checked' : ''}> aktiv</label><button class="secondary">Speichern</button></form>`).join('')}
+    <form data-submit="vehicle-new" class="card form"><h3>Fahrzeug hinzufügen</h3><div class="grid2"><label>Bezeichnung<input name="label" required maxlength="60"></label><label>Kennzeichen<input name="plate" maxlength="20"></label></div>
+      <button class="primary">Hinzufügen</button></form>`;
 }
 
 // --- Academy --------------------------------------------------------------------
@@ -712,7 +890,7 @@ function viewMore() {
   render(__seq, `<h1 class="page-title">${icon('dash')} ${esc(tr('tab_more'))}</h1><div class="persona-grid more-grid">
     ${b('#/goods', 'scan', tr('tab_goods'))}${b('#/daily/early', 'sun', tr('daily_inventory') + ' ' + tr('early_shift'))}${b('#/daily/late', 'moon', tr('daily_inventory') + ' ' + tr('late_shift'))}
     ${b('#/inventory', 'box', tr('inventory'))}${b('#/oil', 'oil', tr('tab_oil'))}${b('#/marinade', 'prep', tr('marinade'))}${b('#/pest', 'bug', tr('pest_check'))}${b('#/handbook', 'book', tr('handbook'))}
-    ${b('#/controls', 'box', tr('control_lists'))}${b('#/chem', 'spray', tr('cleaning_agents'))}${b('#/help', 'book', tr('help_title'))}${b('#/train', 'school', tr('train_areas'))}${b('#/problem/', 'warn', tr('btn_problem'))}</div>`);
+    ${b('#/controls', 'box', tr('control_lists'))}${b('#/chem', 'spray', tr('cleaning_agents'))}${b('#/help', 'book', tr('help_title'))}${b('#/train', 'school', tr('train_areas'))}${b('#/problem/', 'warn', tr('btn_problem'))}${b('#/drive', 'car', tr('drive_title'))}${b('#/allergens', 'book', tr('allergens_title'))}${b('#/drafts', 'cloud', tr('drafts_title'))}</div>`);
 }
 
 // --- Reinigungsplan ------------------------------------------------------------------------
@@ -857,7 +1035,7 @@ async function viewOil() {
 function manageNav(active) {
   const items = [['dashboard', 'dash', 'Übersicht'], ['positions', 'store', 'Positionsplan'], ['observe', 'eye', 'Stationscheck'], ['stations', 'star', 'Stationen & Stufen'],
     ['staff', 'lock', 'Mitarbeiter & Zugänge'], ['certs', 'shield', 'Nachweise (§43/METRO)'], ['staffing', 'user', 'Besetzung & Verteilung'], ['week', 'report', 'Wochenbericht'], ['daily', 'box', 'Tagesinventur'], ['onboarding', 'shield', 'Einarbeitung'], ['problems', 'warn', 'Probleme'], ['report', 'report', 'Schichtbericht'], ['templates', 'list', 'Aufgaben-Vorlagen'], ['products', 'history', 'Haltezeiten'],
-    ['readiness', 'shield', 'Einarbeitung & Hygiene'], ['chem', 'spray', 'Reinigungsmittel'], ['controls', 'box', 'Kontrolllisten'], ['reorder', 'box', 'Nachbestellliste'], ['academy', 'school', 'Schulungsbereiche'], ['training', 'school', 'Schulung & Freigaben'], ['stock', 'box', 'Bestand & Codes'], ['oil', 'oil', 'Öl-Grenzwerte'], ['audit', 'history', 'Protokoll']];
+    ['readiness', 'shield', 'Einarbeitung & Hygiene'], ['chem', 'spray', 'Reinigungsmittel'], ['controls', 'box', 'Kontrolllisten'], ['reorder', 'box', 'Nachbestellliste'], ['academy', 'school', 'Schulungsbereiche'], ['drivers', 'car', 'Fahrer & Fahrzeuge'], ['training', 'school', 'Schulung & Freigaben'], ['stock', 'box', 'Bestand & Codes'], ['oil', 'oil', 'Öl-Grenzwerte'], ['audit', 'history', 'Protokoll']];
   if (S.me.is_admin) items.push(['recipes', 'prep', 'Rezepturen (Marinaden)'], ['sops', 'book', 'Anleitungen (SOP)'], ['users', 'user', 'Benutzer & Filialen']);
   const allowed = { dashboard: true, staffing: isShiftLead(), week: isShiftLead(), daily: isShiftLead(), onboarding: isTrainer(), positions: isShiftLead(), observe: isTrainer(), stations: isShiftLead() || isTrainer(), training: isTrainer() || isManager() };
   const visible = items.filter(([k]) => isManager() || allowed[k]);
@@ -867,7 +1045,7 @@ function manageNav(active) {
 async function viewManage(sub = 'dashboard', arg) {
   const __seq = renderSeq;
   try {
-    const fn = { dashboard: mDashboard, readiness: mReadiness, chem: mChem, controls: mControls, reorder: mReorder, academy: mAcademy, staff: mStaff, certs: mCerts, staffing: mStaffing, week: mWeek, recipes: mRecipes, daily: mDaily, onboarding: mOnboarding, positions: mPositions, observe: mObserve, stations: mStations, products: mProducts, problems: mProblems, report: mReport, templates: mTemplates, training: mTraining, stock: mStock, oil: mOil, audit: mAudit, sops: mSops, users: mUsers }[sub] || mDashboard;
+    const fn = { dashboard: mDashboard, drivers: mDrivers, readiness: mReadiness, chem: mChem, controls: mControls, reorder: mReorder, academy: mAcademy, staff: mStaff, certs: mCerts, staffing: mStaffing, week: mWeek, recipes: mRecipes, daily: mDaily, onboarding: mOnboarding, positions: mPositions, observe: mObserve, stations: mStations, products: mProducts, problems: mProblems, report: mReport, templates: mTemplates, training: mTraining, stock: mStock, oil: mOil, audit: mAudit, sops: mSops, users: mUsers }[sub] || mDashboard;
     const html = await fn(arg);
     render(__seq, `${manageNav(sub)}<div class="manage">${html}</div>`);
   } catch (e) { render(__seq, `${manageNav(sub)}${errorBox(e)}`); }
@@ -1147,7 +1325,9 @@ async function mRecipes(arg) {
         ${[0, 1, 2, 3, 4, 5, 6, 7].map((k) => `<div class="grid3"><input name="in${k}" placeholder="Zutat ${k + 1}" value="${esc(ing[k]?.name || '')}" aria-label="Zutat ${k + 1}">
           <input name="ip${k}" type="number" step="0.01" min="0" placeholder="Menge" value="${ing[k]?.per_kg ?? ''}" aria-label="Menge ${k + 1}">
           <select name="iu${k}" aria-label="Einheit ${k + 1}">${['g', 'kg', 'ml', 'L', 'Stück'].map((u) => `<option ${(ing[k]?.unit || 'g') === u ? 'selected' : ''}>${u}</option>`).join('')}</select></div>`).join('')}
-        <label>Allergene (laut Allergenliste)<input name="allergens" value="${esc(r?.allergens || '')}"></label>
+        <fieldset class="allergen-pick"><legend>Allergene (14 Hauptallergene, LMIV Anhang II) – nur laut Spezifikation/Allergenliste ankreuzen</legend>
+          ${ALLERGENS.map((c) => `<label class="check"><input type="checkbox" name="allergen_codes" value="${c}" ${(r?.allergen_codes || []).includes(c) ? 'checked' : ''}> ${esc(t('alg_' + c, 'de'))}</label>`).join('')}</fieldset>
+        <label>Hinweis zu Allergenen (optional, z. B. Spuren laut Lieferant)<input name="allergens" value="${esc(r?.allergens || '')}"></label>
         <div class="grid2"><label>Erlaubte Abweichung beim Abwiegen (%, leer = nur melden)<input name="tolerance_percent" type="number" step="0.5" min="0" max="50" value="${r?.tolerance_percent ?? ''}"></label>
         <label>Verwendbar (Stunden, leer = keine Frist)<input name="use_within_hours" type="number" min="1" max="336" value="${r?.use_within_hours ?? ''}"></label>
         <label>Quelle der Frist (Pflicht bei Frist)<input name="use_source" value="${esc(r?.use_source || '')}"></label></div>
@@ -1348,8 +1528,11 @@ async function mSops(arg) {
     const de = v.content.de;
     return `<h1>${icon('edit')} ${esc(s.code)} bearbeiten</h1><p class="note">Speichern erzeugt eine neue Entwurfsversion. Erst „Freigeben“ macht sie für Mitarbeiter sichtbar. Übersetzungen anderer Sprachen bleiben aus der Vorversion erhalten und gelten als ungeprüft.</p>
       <form data-submit="sop-save" data-id="${s.id}" class="form"><label>Titel (DE)<input name="title" value="${esc(de.title)}" required></label>
+      <p class="note">Fotos: nur den Arbeitsschritt zeigen – keine Personen, keine Gesichter. Fotos sind für alle Filialen sichtbar.</p>
       ${[0, 1, 2, 3, 4, 5].map((k) => `<div class="grid2"><label>Schritt ${k + 1}<textarea name="step${k}" rows="2">${esc(de.steps[k]?.text || '')}</textarea></label>
-        <label>Symbol<select name="icon${k}">${['check', 'hands', 'spray', 'clean', 'warn', 'shield', 'lock', 'book', 'power', 'snow', 'fryer', 'thermo', 'trash', 'run'].map((i) => `<option ${de.steps[k]?.icon === i ? 'selected' : ''}>${i}</option>`).join('')}</select></label></div>`).join('')}
+        <label>Symbol<select name="icon${k}">${['check', 'hands', 'spray', 'clean', 'warn', 'shield', 'lock', 'book', 'power', 'snow', 'fryer', 'thermo', 'trash', 'run'].map((i) => `<option ${de.steps[k]?.icon === i ? 'selected' : ''}>${i}</option>`).join('')}</select></label></div>
+        <div class="sop-photo">${de.steps[k]?.media_id ? `<img class="thumb" src="/api/media/${de.steps[k].media_id}" alt=""><input type="hidden" name="media${k}" value="${de.steps[k].media_id}"><label class="check"><input type="checkbox" name="nomedia${k}"> Foto entfernen</label>` : ''}
+        ${photoField('sop-' + k, `Foto für Schritt ${k + 1}`)}</div>`).join('')}
       <button class="primary">Neue Version speichern</button></form>`;
   }
   return `<h1>${icon('book')} Anleitungen (SOP)</h1>${sops.map((s) => { const appr = s.versions.find((v) => v.status === 'approved'); const draft = s.versions.find((v) => v.status === 'draft');
@@ -1399,6 +1582,10 @@ async function route() {
     case 'train': return b ? viewTrainModule(b) : viewTrain();
     case 'texam': return viewTrainExam(b);
     case 'help': return viewHelp();
+    case 'drive': return b ? viewDriveCheck(b, c) : viewDrive();
+    case 'drafts': return viewDrafts();
+    case 'taskhelp': return viewTaskHelp(b);
+    case 'allergens': return viewAllergens();
     case 'cleaning': return viewCleaning();
     case 'task': return viewTask(b);
     case 'goods': return viewGoods();
@@ -1426,6 +1613,11 @@ document.addEventListener('click', async (ev) => {
   try {
     if (A === 'set-lang') { setLang(el.dataset.lang); return route(); }
     if (A === 'demo') { await post('/api/demo/session', { persona: el.dataset.persona }); await loadMe(); S.branch = S.me.branches[0]?.id; localStorage.setItem('fh_branch', S.branch); location.hash = el.dataset.persona.startsWith('employee') ? '#/shift' : '#/manage/dashboard'; return route(); }
+    if (A === 'speak-lang') { const old = S.lang; S.lang = el.dataset.lang; speak(el.dataset.text); S.lang = old; return; }
+    if (A === 'drive-shift') { S.driveShift = el.dataset.shift; return route(); }
+    if (A === 'sync-now') { await syncNow(true); return route(); }
+    if (A === 'draft-discard') { if (!confirm(tr('draft_discard_q'))) return; await Drafts.deleteDraft(el.dataset.id); await refreshDrafts(); return route(); }
+    if (A === 'driver-off') { await post(`/api/drivers/${el.dataset.id}/deactivate`, { branch: S.branch }); S.flash = { type: 'ok', text: tr('saved') }; return route(); }
     if (A === 'logout') { await post('/api/logout'); S.me = null; location.hash = ''; return route(); }
     if (A === 'set-shift') { S.shift = el.dataset.shift; localStorage.setItem('fh_shift', S.shift); S.photo = null; return route(); }
     if (A === 'speak') return speak(el.dataset.text);
@@ -1499,11 +1691,19 @@ document.addEventListener('change', async (ev) => {
       const label = el.closest('.photo-field');
       label?.classList.add('busy');
       const purpose = el.dataset.purpose;
-      const apiPurpose = purpose.startsWith('oil-') ? 'oil' : purpose;
-      const r = await uploadPhoto(f, apiPurpose);
-      S.photo = { id: r.id, purpose, preview: f.type.startsWith('image/') ? URL.createObjectURL(f) : null };
+      const apiPurpose = purpose.startsWith('oil-') ? 'oil' : purpose.startsWith('sop-') ? 'sop' : ['fuel', 'interior'].includes(purpose) ? 'evidence' : purpose;
+      const preview = f.type.startsWith('image/') ? URL.createObjectURL(f) : null;
+      try {
+        const r = await uploadPhoto(f, apiPurpose);
+        S.photo = { id: r.id, purpose, preview };
+      } catch (e) {
+        // Ohne Netz: Foto nur in Formularen mit Entwurfs-Funktion auf dem Gerät behalten – es gilt erst nach dem Senden.
+        if (e?.status !== 0 || !el.closest('[data-draft]') || !Drafts.available()) { label?.classList.remove('busy'); throw e; }
+        S.photo = { offline: true, blob: f.type === 'application/pdf' ? f : await shrinkImage(f), apiPurpose, purpose, preview };
+      }
+      S.photos[purpose] = S.photo;
       label?.classList.remove('busy'); label?.classList.add('ready');
-      const span = label?.querySelector('.photo-btn span'); if (span) span.textContent = tr('photo_ok');
+      const span = label?.querySelector('.photo-btn span'); if (span) span.textContent = S.photo.offline ? tr('photo_offline') : tr('photo_ok');
       if (S.photo.preview && label && !label.querySelector('img')) { const img = document.createElement('img'); img.className = 'thumb'; img.src = S.photo.preview; img.alt = ''; label.appendChild(img); }
     }
   } catch (e) { showError(e); }
@@ -1551,10 +1751,12 @@ document.addEventListener('submit', async (ev) => {
         return viewExamResult(id, r, qsList);
       }
       case 'control': {
-        const r = await get(`/api/controls/runs/${form.dataset.id}`);
-        const lines = r.items.map((i) => ({ item_id: i.id, qty: fd['qty_' + i.id], marinated_at: fd['mat_' + i.id] || '' }));
-        const res = await post(`/api/controls/runs/${form.dataset.id}`, { lines, temperature: fd.temperature, media_id: S.photo?.purpose === 'evidence' ? S.photo.id : undefined });
-        S.photo = null;
+        // Positionen aus dem Formular lesen (kein zusätzlicher Abruf – funktioniert auch ohne Netz)
+        const lines = Object.keys(fd).filter((k) => k.startsWith('qty_')).map((k) => { const id = Number(k.slice(4)); return { item_id: id, qty: fd[k], marinated_at: fd['mat_' + id] || '' }; });
+        const res = await sendOrDraft({ kind: 'control', label: form.dataset.label || tr('control_lists'), url: `/api/controls/runs/${form.dataset.id}`,
+          body: { lines, temperature: fd.temperature }, photos: { media_id: S.photos.evidence || (S.photo?.purpose === 'evidence' ? S.photo : null) } });
+        S.photo = null; S.photos = {};
+        if (res.draft) { location.hash = '#/drafts'; return; }
         const parts = [tr('saved')];
         if (res.critical?.length) parts.push(`${tr('critical_zero')}: ${res.critical.join(', ')}`);
         if (res.temp_alarm) parts.push(`${tr('temp_too_high')} (max. ${res.temp_max} °C)`);
@@ -1575,9 +1777,26 @@ document.addEventListener('submit', async (ev) => {
       case 'ctl-review': await post(`/api/controls/runs/${form.dataset.id}/review`, { ok: submitter?.value !== 'rework', note: fd.note }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'hygiene': {
         const answers = Object.fromEntries(['clothes', 'shoes', 'hair', 'beard', 'nails', 'no_polish', 'jewelry', 'hands', 'wounds', 'no_ban', 'private_items', 'rules'].map((k) => [k, fd[k]]));
-        const r = await post('/api/hygiene', { branch: S.branch, shift: S.shift, answers });
+        const r = await sendOrDraft({ kind: 'hygiene', label: tr('hygiene_title'), url: '/api/hygiene', body: { branch: S.branch, shift: S.shift, answers } });
+        if (r.draft) { location.hash = '#/drafts'; return; }
         S.flash = { type: r.all_ok ? 'ok' : 'warn', text: r.all_ok ? tr('saved') : tr('hygiene_intro') }; break;
       }
+      case 'vehicle': {
+        const keys = (form.dataset.keys || '').split(',');
+        const answers = Object.fromEntries(keys.map((k) => [k, fd[k]]));
+        const r = await sendOrDraft({ kind: 'vehicle', label: `${form.dataset.label} · ${tr(form.dataset.kind === 'start' ? 'dv_start' : 'dv_end')}`, url: '/api/drivers/checks',
+          body: { branch: S.branch, vehicle_id: Number(form.dataset.vehicle), shift: form.dataset.shift, kind: form.dataset.kind, answers, fuel_level: fd.fuel_level, note: fd.note },
+          photos: { fuel_media_id: S.photos.fuel, interior_media_id: S.photos.interior } });
+        S.photo = null; S.photos = {};
+        if (r.draft) { location.hash = '#/drafts'; return; }
+        S.flash = r.blocked ? { type: 'error', text: tr('dv_blocked_now') } : r.defects?.length ? { type: 'warn', text: tr('dv_defect_sent') } : { type: 'ok', text: tr('saved') };
+        location.hash = '#/drive'; return;
+      }
+      case 'driver-add': await post('/api/drivers', { branch: S.branch, user_id: Number(fd.user_id), licence_class: fd.licence_class, licence_checked_on: fd.licence_checked_on, licence_note: fd.licence_note }); S.flash = { type: 'ok', text: tr('saved') }; break;
+      case 'vehicle-new': await post('/api/vehicles', { branch: S.branch, label: fd.label, plate: fd.plate }); S.flash = { type: 'ok', text: tr('saved') }; break;
+      case 'vehicle-edit': await api('PUT', `/api/vehicles/${form.dataset.id}`, { label: fd.label, plate: fd.plate, active: !!fd.active }); S.flash = { type: 'ok', text: tr('saved') }; break;
+      case 'vehicle-unblock': await post(`/api/vehicles/${form.dataset.id}/unblock`, { note: fd.note }); S.flash = { type: 'ok', text: 'Fahrzeug wieder freigegeben.' }; break;
+      case 'driver-settings': await api('PUT', '/api/drivers/settings', { branch: S.branch, licence_check_months: fd.licence_check_months }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'release': await post(`/api/readiness/${form.dataset.user}/release`, { branch: S.branch, prior_activity: !!fd.prior_activity, note: fd.note }); S.flash = { type: 'ok', text: 'Freigegeben.' }; break;
       case 'revoke': await post(`/api/readiness/${form.dataset.user}/revoke`, { branch: S.branch, note: fd.note }); S.flash = { type: 'ok', text: 'Freigabe entzogen.' }; break;
       case 'readiness-settings': await api('PUT', '/api/readiness/settings', { branch: S.branch, gate_release: !!fd.gate_release, gate_hygiene: !!fd.gate_hygiene, retention_days: fd.retention_days }); S.flash = { type: 'ok', text: tr('saved') }; break;
@@ -1646,7 +1865,9 @@ document.addEventListener('submit', async (ev) => {
       case 'receipt-doc': await post('/api/goods/documents', { branch: S.branch, receipt_no: fd.receipt_no, media_id: S.photo?.purpose === 'receipt' ? S.photo.id : undefined }); S.photo = null; S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'oil-limits': await api('PATCH', `/api/oil/${form.dataset.id}`, fd); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'sop-save': {
-        const steps = [0, 1, 2, 3, 4, 5].map((k) => ({ text: fd['step' + k], icon: fd['icon' + k] })).filter((s) => s.text && s.text.trim());
+        const steps = [0, 1, 2, 3, 4, 5].map((k) => ({ text: fd['step' + k], icon: fd['icon' + k],
+          media_id: S.photos['sop-' + k]?.id || (fd['nomedia' + k] ? undefined : fd['media' + k] ? Number(fd['media' + k]) : undefined) })).filter((s) => s.text && s.text.trim());
+        S.photos = {};
         const sops = await get('/api/admin/sops');
         const prev = sops.find((x) => x.id === Number(form.dataset.id)).versions[0].content;
         await post(`/api/admin/sops/${form.dataset.id}/versions`, { content: { ...prev, de: { title: fd.title, steps } }, reviewed_langs: ['de'] });
@@ -1688,7 +1909,7 @@ document.addEventListener('submit', async (ev) => {
         S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'recipe': {
         const ingredients = [0, 1, 2, 3, 4, 5, 6, 7].map((k) => ({ name: fd['in' + k], per_kg: fd['ip' + k], unit: fd['iu' + k] })).filter((i) => i.name && i.name.trim());
-        const body = { name: fd.name, ingredients, allergens: fd.allergens, tolerance_percent: fd.tolerance_percent, use_within_hours: fd.use_within_hours, use_source: fd.use_source };
+        const body = { name: fd.name, ingredients, allergens: fd.allergens, allergen_codes: [...form.querySelectorAll('input[name=allergen_codes]:checked')].map((x) => x.value), tolerance_percent: fd.tolerance_percent, use_within_hours: fd.use_within_hours, use_source: fd.use_source };
         if (form.dataset.id) await api('PUT', `/api/admin/marinades/${form.dataset.id}`, body); else await post('/api/admin/marinades', body);
         S.flash = { type: 'ok', text: 'Rezeptur gespeichert (neue Version)' }; break;
       }
@@ -1722,15 +1943,17 @@ document.addEventListener('submit', async (ev) => {
   } catch (e) { showError(e); } finally { btns.forEach((b) => (b.disabled = false)); }
 });
 
-window.addEventListener('hashchange', () => { if (!location.hash.startsWith('#/shift')) S.photo = null; if (!location.hash.startsWith('#/timer')) clearInterval(timerTick); route(); });
+window.addEventListener('hashchange', () => { if (!location.hash.startsWith('#/shift')) { S.photo = null; S.photos = {}; } if (!location.hash.startsWith('#/timer')) clearInterval(timerTick); route(); });
 const toggleOffline = () => { const b = document.getElementById('offline-banner'); if (b) b.hidden = navigator.onLine; };
-window.addEventListener('online', toggleOffline);
+window.addEventListener('online', () => { toggleOffline(); syncNow(); });
 window.addEventListener('offline', toggleOffline);
 
 (async function init() {
   setLang(S.lang);
   try { S.config = await get('/api/config'); } catch { S.config = { demo: false, has_admin: true, trusted_hosts: [], notification_channels: [] }; }
   await loadMe();
+  await refreshDrafts();
   route();
+  if (navigator.onLine) syncNow();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 })();
