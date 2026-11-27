@@ -243,6 +243,18 @@ async function viewControls() {
     <div class="extra-list">${lists.map((l) => `<button class="secondary" data-action="ctl-extra" data-id="${l.id}">${icon(l.marinated ? 'prep' : 'box')} ${esc(l.name)}</button>`).join('')}</div>`);
 }
 
+async function viewChem() {
+  const __seq = renderSeq;
+  let list;
+  try { list = await get(`/api/cleaning-products?branch=${S.branch}`); } catch (e) { return render(__seq, errorBox(e)); }
+  list = list.filter((p) => p.status === 'approved');
+  render(__seq, `<h1 class="page-title">${icon('spray')} ${esc(tr('cleaning_agents'))}</h1>
+    ${list.map((p) => `<section class="card"><h2>${esc(p.name)}</h2>${p.manufacturer ? `<small>${esc(p.manufacturer)}</small>` : ''}
+      <dl class="facts"><dt>${esc(tr('application'))}</dt><dd>${esc(p.application)}</dd><dt>${esc(tr('dosage'))}</dt><dd>${esc(p.dosage)}</dd>
+      <dt>${esc(tr('contact_time'))}</dt><dd>${esc(p.contact_time)}</dd><dt>${esc(tr('ppe'))}</dt><dd>${esc(p.ppe)}</dd>${p.material_notes ? `<dt>!</dt><dd>${esc(p.material_notes)}</dd>` : ''}</dl>
+      <a class="secondary" href="${esc(p.sds_url)}" target="_blank" rel="noopener noreferrer">${icon('book')} ${esc(tr('sds'))}</a></section>`).join('') || `<p class="note">${esc(tr('no_agents'))}</p>`}`);
+}
+
 async function viewReceive() {
   const __seq = renderSeq;
   let orders;
@@ -700,7 +712,7 @@ function viewMore() {
   render(__seq, `<h1 class="page-title">${icon('dash')} ${esc(tr('tab_more'))}</h1><div class="persona-grid more-grid">
     ${b('#/goods', 'scan', tr('tab_goods'))}${b('#/daily/early', 'sun', tr('daily_inventory') + ' ' + tr('early_shift'))}${b('#/daily/late', 'moon', tr('daily_inventory') + ' ' + tr('late_shift'))}
     ${b('#/inventory', 'box', tr('inventory'))}${b('#/oil', 'oil', tr('tab_oil'))}${b('#/marinade', 'prep', tr('marinade'))}${b('#/pest', 'bug', tr('pest_check'))}${b('#/handbook', 'book', tr('handbook'))}
-    ${b('#/controls', 'box', tr('control_lists'))}${b('#/help', 'book', tr('help_title'))}${b('#/train', 'school', tr('train_areas'))}${b('#/problem/', 'warn', tr('btn_problem'))}</div>`);
+    ${b('#/controls', 'box', tr('control_lists'))}${b('#/chem', 'spray', tr('cleaning_agents'))}${b('#/help', 'book', tr('help_title'))}${b('#/train', 'school', tr('train_areas'))}${b('#/problem/', 'warn', tr('btn_problem'))}</div>`);
 }
 
 // --- Reinigungsplan ------------------------------------------------------------------------
@@ -845,7 +857,7 @@ async function viewOil() {
 function manageNav(active) {
   const items = [['dashboard', 'dash', 'Übersicht'], ['positions', 'store', 'Positionsplan'], ['observe', 'eye', 'Stationscheck'], ['stations', 'star', 'Stationen & Stufen'],
     ['staff', 'lock', 'Mitarbeiter & Zugänge'], ['certs', 'shield', 'Nachweise (§43/METRO)'], ['staffing', 'user', 'Besetzung & Verteilung'], ['week', 'report', 'Wochenbericht'], ['daily', 'box', 'Tagesinventur'], ['onboarding', 'shield', 'Einarbeitung'], ['problems', 'warn', 'Probleme'], ['report', 'report', 'Schichtbericht'], ['templates', 'list', 'Aufgaben-Vorlagen'], ['products', 'history', 'Haltezeiten'],
-    ['readiness', 'shield', 'Einarbeitung & Hygiene'], ['controls', 'box', 'Kontrolllisten'], ['reorder', 'box', 'Nachbestellliste'], ['academy', 'school', 'Schulungsbereiche'], ['training', 'school', 'Schulung & Freigaben'], ['stock', 'box', 'Bestand & Codes'], ['oil', 'oil', 'Öl-Grenzwerte'], ['audit', 'history', 'Protokoll']];
+    ['readiness', 'shield', 'Einarbeitung & Hygiene'], ['chem', 'spray', 'Reinigungsmittel'], ['controls', 'box', 'Kontrolllisten'], ['reorder', 'box', 'Nachbestellliste'], ['academy', 'school', 'Schulungsbereiche'], ['training', 'school', 'Schulung & Freigaben'], ['stock', 'box', 'Bestand & Codes'], ['oil', 'oil', 'Öl-Grenzwerte'], ['audit', 'history', 'Protokoll']];
   if (S.me.is_admin) items.push(['recipes', 'prep', 'Rezepturen (Marinaden)'], ['sops', 'book', 'Anleitungen (SOP)'], ['users', 'user', 'Benutzer & Filialen']);
   const allowed = { dashboard: true, staffing: isShiftLead(), week: isShiftLead(), daily: isShiftLead(), onboarding: isTrainer(), positions: isShiftLead(), observe: isTrainer(), stations: isShiftLead() || isTrainer(), training: isTrainer() || isManager() };
   const visible = items.filter(([k]) => isManager() || allowed[k]);
@@ -855,7 +867,7 @@ function manageNav(active) {
 async function viewManage(sub = 'dashboard', arg) {
   const __seq = renderSeq;
   try {
-    const fn = { dashboard: mDashboard, readiness: mReadiness, controls: mControls, reorder: mReorder, academy: mAcademy, staff: mStaff, certs: mCerts, staffing: mStaffing, week: mWeek, recipes: mRecipes, daily: mDaily, onboarding: mOnboarding, positions: mPositions, observe: mObserve, stations: mStations, products: mProducts, problems: mProblems, report: mReport, templates: mTemplates, training: mTraining, stock: mStock, oil: mOil, audit: mAudit, sops: mSops, users: mUsers }[sub] || mDashboard;
+    const fn = { dashboard: mDashboard, readiness: mReadiness, chem: mChem, controls: mControls, reorder: mReorder, academy: mAcademy, staff: mStaff, certs: mCerts, staffing: mStaffing, week: mWeek, recipes: mRecipes, daily: mDaily, onboarding: mOnboarding, positions: mPositions, observe: mObserve, stations: mStations, products: mProducts, problems: mProblems, report: mReport, templates: mTemplates, training: mTraining, stock: mStock, oil: mOil, audit: mAudit, sops: mSops, users: mUsers }[sub] || mDashboard;
     const html = await fn(arg);
     render(__seq, `${manageNav(sub)}<div class="manage">${html}</div>`);
   } catch (e) { render(__seq, `${manageNav(sub)}${errorBox(e)}`); }
@@ -947,6 +959,20 @@ async function mControls() {
         <p class="note">Produktbild: oben „Produktbild aufnehmen“, dann hier speichern.</p><button class="small primary">speichern</button></form></details></td></tr>`).join('')}</tbody></table>
       <form data-submit="ctl-item-new" data-id="${l.id}" class="inline"><input name="name" placeholder="Neuer Artikel" required aria-label="Neuer Artikel"><input name="unit" placeholder="Einheit" aria-label="Einheit" size="8"><input name="min_qty" type="number" step="0.01" min="0" placeholder="min." aria-label="Mindestwert" size="6"><button class="small primary">hinzufügen</button></form>
     </details>`).join('')}`;
+}
+
+async function mChem() {
+  if (!S.me.is_admin) return '<p class="note">Reinigungsmittel pflegt der Betreiber.</p>';
+  const list = await get('/api/cleaning-products');
+  const f = (p, k, label, area) => `<label>${label}${area ? `<textarea name="${k}" rows="2">${esc(p[k] || '')}</textarea>` : `<input name="${k}" value="${esc(p[k] || '')}">`}</label>`;
+  return `<h1>${icon('spray')} Reinigungsmittel</h1>
+    <p class="note">Dosierung, Einwirkzeit, Schutzausrüstung und Anwendung nur aus Etikett bzw. Sicherheitsdatenblatt übernehmen – nichts schätzen. Mitarbeiter sehen nur freigegebene Einträge. Jede Änderung setzt den Eintrag auf Entwurf zurück. Anleitungen je Bereich: unter „Anleitungen“ als Entwürfe (Fotos/Videos/Werte ergänzen, dann freigeben).</p>
+    ${list.map((p) => `<details class="card"><summary><b>${esc(p.name)}</b> · <span class="badge ${p.status === 'approved' ? 'ok' : 'warn'}">${p.status === 'approved' ? 'freigegeben' : 'Entwurf'}</span></summary>
+      <form data-submit="chem-edit" data-id="${p.id}" class="form">${f(p, 'name', 'Name')}${f(p, 'manufacturer', 'Hersteller')}${f(p, 'product_url', 'Produktlink (https)')}${f(p, 'article_no', 'Artikelnummer (verifiziert)')}
+        ${f(p, 'application', 'Anwendung', true)}${f(p, 'dosage', 'Dosierung')}${f(p, 'contact_time', 'Einwirkzeit')}${f(p, 'ppe', 'Schutzausrüstung')}${f(p, 'material_notes', 'Materialverträglichkeit / Hinweise', true)}
+        ${f(p, 'sds_url', 'Sicherheitsdatenblatt (https)')}${f(p, 'sop_code', 'Zugehörige Anleitung (Code)')}
+        <div class="row"><button class="primary">Speichern</button>${p.status !== 'approved' ? `<button type="button" class="secondary" data-action="chem-approve" data-id="${p.id}">Freigeben</button>` : ''}</div></form></details>`).join('')}
+    <form data-submit="chem-new" class="form card inline"><input name="name" placeholder="Neues Reinigungsmittel" required aria-label="Name"><input name="manufacturer" placeholder="Hersteller" aria-label="Hersteller"><button class="primary">Hinzufügen</button></form>`;
 }
 
 async function mReadiness() {
@@ -1369,6 +1395,7 @@ async function route() {
     case 'controls': return viewControls();
     case 'control': return viewControl(b);
     case 'receive': return viewReceive();
+    case 'chem': return viewChem();
     case 'train': return b ? viewTrainModule(b) : viewTrain();
     case 'texam': return viewTrainExam(b);
     case 'help': return viewHelp();
@@ -1410,6 +1437,7 @@ document.addEventListener('click', async (ev) => {
     if (A === 'print') return window.print();
     if (A === 'tpl-move') { await post(`/api/templates/${el.dataset.id}/move`, { dir: el.dataset.dir }); return route(); }
     if (A === 'tpl-photo') { await api('PATCH', `/api/templates/${el.dataset.id}`, { requires_photo: el.dataset.val === '1' }); return route(); }
+    if (A === 'chem-approve') { await post(`/api/cleaning-products/${el.dataset.id}/approve`); S.flash = { type: 'ok', text: 'Freigegeben.' }; return route(); }
     if (A === 'ctl-extra') { const r = await post(`/api/controls/lists/${el.dataset.id}/extra`); location.hash = `#/control/${r.id}`; return; }
     if (A === 'alert-ack') { await post(`/api/stock/alerts/${el.dataset.id}/ack`); S.flash = { type: 'ok', text: tr('saved') }; return route(); }
     if (A === 'order-cancel') { await post(`/api/stock/orders/${el.dataset.id}/cancel`); S.flash = { type: 'ok', text: tr('saved') }; return route(); }
@@ -1554,6 +1582,8 @@ document.addEventListener('submit', async (ev) => {
       case 'revoke': await post(`/api/readiness/${form.dataset.user}/revoke`, { branch: S.branch, note: fd.note }); S.flash = { type: 'ok', text: 'Freigabe entzogen.' }; break;
       case 'readiness-settings': await api('PUT', '/api/readiness/settings', { branch: S.branch, gate_release: !!fd.gate_release, gate_hygiene: !!fd.gate_hygiene, retention_days: fd.retention_days }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'hygiene-review': await post(`/api/hygiene/${form.dataset.id}/review`, { decision: submitter?.value }); S.flash = { type: 'ok', text: tr('saved') }; break;
+      case 'chem-edit': await api('PUT', `/api/cleaning-products/${form.dataset.id}`, fd); S.flash = { type: 'ok', text: 'Gespeichert – Eintrag ist wieder Entwurf, bitte freigeben.' }; break;
+      case 'chem-new': await post('/api/cleaning-products', { name: fd.name, manufacturer: fd.manufacturer }); S.flash = { type: 'ok', text: tr('saved') }; break;
       case 'receive': {
         const r = await post(`/api/stock/orders/${form.dataset.id}/receive`, { qty: fd.qty, stock_after: fd.stock_after });
         S.flash = { type: 'ok', text: `${tr('saved')}${r.open_qty ? ` · offen: ${r.open_qty}` : ''}` }; break;

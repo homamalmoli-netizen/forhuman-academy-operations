@@ -118,3 +118,7 @@ Stand dieses Pull Requests. „Umgesetzt“ heißt: programmiert **und** durch a
   - Die Antworten werden nach der Aufbewahrungsfrist gelöscht (Standard 30 Tage).
 - Beide Sperren sind im Echtbetrieb standardmäßig an und unter **Leitung → Einarbeitung & Hygiene** schaltbar. In der Demo sind die fiktiven Mitarbeiter freigegeben und der Hygiene-Check ist aus.
 - Kein Rechtsrat: Fristen und Formulierungen bitte mit Fachberatung bzw. Gesundheitsamt bestätigen.
+
+## Anleitungen je Bereich und Reinigungsmittel (Issue #20)
+- 13 Bereichsanleitungen als **gesperrte Entwürfe**: Fleisch annehmen/prüfen/lagern, Marinieren, Fritteuse, Öl/Filter, Pommes, Burger/Wraps, Verpackung, Ausgabe, Reinigung, Lager (FIFO/FEFO), Inventur/Kontrolllisten, Kühlgeräte/Temperaturen, Notfall/Problem. Für Mitarbeiter und die Hilfesuche sind sie erst nach Freigabe sichtbar, auch in der Demo. Fotos, Videos und filialspezifische Werte ergänzt der Betreiber.
+- Reinigungsmittel-Stamm mit Name, Hersteller, Produktlink, Artikelnummer, Anwendung, Dosierung, Einwirkzeit, Schutzausrüstung, Materialhinweisen, Sicherheitsdatenblatt und zugehöriger Anleitung. Die fachlichen Felder sind leer und nicht erfunden. Freigabe nur mit Anwendung, Dosierung, Einwirkzeit, Schutzausrüstung und Link zum Sicherheitsdatenblatt (auch in der Datenbank erzwungen). Jede Änderung setzt den Eintrag auf Entwurf zurück. Mitarbeiter sehen nur Freigegebenes (Mehr → Reinigungsmittel).

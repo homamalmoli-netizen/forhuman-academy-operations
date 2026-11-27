@@ -20,6 +20,7 @@ import { registerTraining } from './training.js';
 import { registerControls, seedControls } from './controls.js';
 import { registerStock } from './stock.js';
 import { registerReadiness, workGate } from './readiness.js';
+import { registerGuides } from './guides.js';
 
 export const LANGS = ['de', 'ar', 'en', 'tr'];
 const SHIFTS = ['open', 'run', 'close'];
@@ -1000,6 +1001,7 @@ export function createApp({ db, demo = false, uploadDir, publicDir, sharedDir, t
   const { notify: ctlNotify } = registerControls({ route, db, needUser, needBranch, HttpError, bad, notFound, can, mediaInBranch });
   registerStock({ route, db, needUser, needBranch, HttpError, bad, notFound, notify: ctlNotify, SEC_HEADERS });
   registerReadiness({ route, db, needUser, needBranch, HttpError, bad, notFound, notify: ctlNotify });
+  registerGuides({ route, db, needUser, needBranch, needAdmin, HttpError, bad, notFound });
   route('PATCH', '/api/courses/:id', (ctx) => {
     const a = needAdmin(ctx);
     const c = db.prepare('SELECT * FROM courses WHERE id = ?').get(Number(ctx.params.id));

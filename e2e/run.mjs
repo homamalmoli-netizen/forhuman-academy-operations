@@ -667,6 +667,13 @@ try {
     await a.locator('.flash.ok').waitFor();
   });
 
+  await step('Betreiber: Reinigungsmittel-Stamm – Entwürfe ohne erfundene Dosierung, Freigabe erst mit Sicherheitsdatenblatt', async () => {
+    await nav(a, '#/manage/chem');
+    await a.locator('details', { hasText: 'aro Vollglanz' }).waitFor();
+    await shotFull(a, '67-reinigungsmittel-stamm');
+    await nav(a, '#/manage/dashboard');
+  });
+
   await step('Leitung: Kontrolllisten – Tagesübersicht, Unterbestand, Mindestwerte, Intervalle', async () => {
     await a.click('a[href="#/manage/controls"]');
     await a.locator('h2', { hasText: 'Unter Mindestbestand' }).waitFor();

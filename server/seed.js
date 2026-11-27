@@ -7,6 +7,7 @@ import { EXTRA_COURSES } from './courses-extra.js';
 import { DAILY_ITEMS } from './handbook.js';
 import { seedTraining } from './training.js';
 import { seedControls } from './controls.js';
+import { seedGuides } from './guides.js';
 
 const L = (de, en, ar, tr) => ({ de, en, ar, tr });
 
@@ -390,6 +391,7 @@ export function seedBase(db, { dailyItems = true } = {}) {
   });
   if (dailyItems) seedDailyItems(db);
   seedTraining(db);
+  seedGuides(db);
   // Startvorlagen je Filiale (Manager kann sie danach ändern, sortieren, abschalten)
   for (const b of db.prepare('SELECT id FROM branches').all()) { seedStations(db, b.id); seedTemplates(db, b.id); seedControls(db, b.id); }
 }
@@ -443,7 +445,8 @@ export function seedDemo(db) {
     mem.run(users.empLeuna, leuna, 'employee');
     mem.run(users.leadHalle, halle, 'shift_lead');
     mem.run(users.empHalle2, halle, 'employee');
-    db.prepare("UPDATE sop_versions SET status = 'approved', approved_by = ?, approved_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')").run(users.admin);
+    // Bereichsanleitungen (Issue #20) bleiben auch in der Demo gesperrte Entwürfe, bis Fotos/Werte vom Betreiber vorliegen
+    db.prepare("UPDATE sop_versions SET status = 'approved', approved_by = ?, approved_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE sop_id NOT IN (SELECT id FROM sops WHERE code LIKE 'bereich-%')").run(users.admin);
 
     // Fiktiver Artikelstamm. GTINs aus dem GS1-Bereich 20-29 (nur für interne Nutzung, kollidiert nie mit echten Produkten), gültige Prüfziffer.
     const insItem = db.prepare('INSERT INTO items (name, unit, category, metro_article_no, needs_temperature) VALUES (?,?,?,?,?)');

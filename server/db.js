@@ -893,6 +893,27 @@ const MIGRATIONS = [
     UNIQUE (branch_id, user_id, work_date, shift)
   );
   `,
+  // 16: Reinigungsmittel-Stamm – fachliche Angaben nur aus Etikett/Sicherheitsdatenblatt, sichtbar erst nach Freigabe.
+  `
+  CREATE TABLE cleaning_products (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    manufacturer TEXT,
+    product_url TEXT CHECK (product_url IS NULL OR product_url LIKE 'https://%'),
+    article_no TEXT,
+    application TEXT,
+    dosage TEXT,
+    contact_time TEXT,
+    ppe TEXT,
+    material_notes TEXT,
+    sds_url TEXT CHECK (sds_url IS NULL OR sds_url LIKE 'https://%'),
+    sop_code TEXT,
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','approved')),
+    approved_by INTEGER REFERENCES users(id),
+    approved_at TEXT,
+    CHECK (status <> 'approved' OR (dosage IS NOT NULL AND contact_time IS NOT NULL AND ppe IS NOT NULL AND application IS NOT NULL AND sds_url IS NOT NULL))
+  );
+  `,
 ];
 
 export function openDb(file = ':memory:') {

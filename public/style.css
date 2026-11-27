@@ -351,3 +351,6 @@ fieldset.yn { display: block; border: 0; border-bottom: 1px solid var(--line, #e
 fieldset.yn legend { display: block; width: 100%; padding: 0 0 6px; font-weight: 700; }
 .yn-opts { display: flex; gap: 8px; }
 .yn-opts .option { flex: 1 1 0; margin: 0 !important; min-width: 0; }
+.facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 10px 0; }
+.facts dt { font-weight: 700; }
+.facts dd { margin: 0; }

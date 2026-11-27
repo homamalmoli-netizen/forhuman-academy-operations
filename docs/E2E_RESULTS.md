@@ -1,6 +1,6 @@
 # End-to-End-Ergebnis
 
-Ausgeführt: 2026-11-27T02:17:45.335Z · Chrome · Handy-Ansicht 390×844
+Ausgeführt: 2026-11-27T02:21:48.057Z · Chrome · Handy-Ansicht 390×844
 
 - ✅ Startseite: Sprache wählen und Demo ohne Login
 - ✅ Öffnung: eine Aufgabe pro Bildschirm, Erledigt
@@ -50,9 +50,10 @@ Ausgeführt: 2026-11-27T02:17:45.335Z · Chrome · Handy-Ansicht 390×844
 - ✅ Admin: Anleitung (SOP) mit Prüfstatus und Versionen
 - ✅ Nachbestellliste je Lieferant, Bestellung erfassen, Lieferung mit Bestandsbestätigung
 - ✅ Einarbeitung & Hygiene: Leitung schaltet Hygiene-Check ein, Mitarbeiter füllt ihn vor Schichtbeginn aus
+- ✅ Betreiber: Reinigungsmittel-Stamm – Entwürfe ohne erfundene Dosierung, Freigabe erst mit Sicherheitsdatenblatt
 - ✅ Leitung: Kontrolllisten – Tagesübersicht, Unterbestand, Mindestwerte, Intervalle
 - ✅ Betreiber: Schulungsbereiche – Übersicht, Fragenpool, Inhalte und Fragen bearbeiten
 - ✅ Produktion: nur Anmeldung, keine Demo-Buttons, keine Standardkonten
 - ✅ Offline: keine falsche Erfolgsmeldung
 
-**52 von 52 bestanden.** Screenshots: `docs/screenshots/`
+**53 von 53 bestanden.** Screenshots: `docs/screenshots/`
