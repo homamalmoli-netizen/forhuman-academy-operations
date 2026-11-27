@@ -7,6 +7,7 @@ import { mkdtempSync } from 'node:fs';
 import { openDb } from './db.js';
 import { createApp, purgeExpiredMedia } from './app.js';
 import { runReminders } from './inventory.js';
+import { runControlReminders } from './controls.js';
 import { seedBase, seedDemo } from './seed.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -46,6 +47,12 @@ if (!demo) {
 const reminderRun = () => { for (const b of db.prepare('SELECT id FROM branches WHERE active = 1').all()) { try { runReminders(db, b.id); } catch (e) { console.error('reminder', e); } } };
 reminderRun();
 setInterval(reminderRun, 10 * 60e3).unref(); // alle 10 Minuten (Fristen 17:00 / 23:00)
+// Kontrolllisten: Erinnerungsstufen (−10 / 0 / +5 / +10 Minuten) brauchen einen Minutentakt; Zustand liegt in der Datenbank (übersteht Neustarts)
+const ctlNotify = (d, branchId, kind, message, ref, userId = null, audience = 'manager') =>
+  d.prepare('INSERT OR IGNORE INTO notifications (branch_id, kind, message, ref, user_id, audience) VALUES (?,?,?,?,?,?)').run(branchId, kind, message, ref, userId, audience).changes;
+const controlRun = () => { for (const b of db.prepare('SELECT id FROM branches WHERE active = 1').all()) { try { runControlReminders(db, b.id, new Date(), ctlNotify); } catch (e) { console.error('control', e); } } };
+controlRun();
+setInterval(controlRun, 60e3).unref();
 
 createServer(handler).listen(port, process.env.HOST || '0.0.0.0', () => {
   console.log(`ForHuman Academy & Operations ${demo ? 'DEMO (fiktive Daten, In-Memory)' : 'PRODUKTION'} auf Port ${port}`);

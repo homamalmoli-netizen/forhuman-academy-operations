@@ -40,6 +40,7 @@ small, .meta { color: var(--muted); }
 .banner.ok { background: #e6f4ea; border-color: var(--ok); color: var(--ok); }
 .flash { border-radius: 12px; padding: 12px 14px; margin: 8px 0; font-weight: 700; }
 .flash.ok { background: #e6f4ea; color: var(--ok); }
+.flash.warn { background: #fff4e5; color: #8a4b00; }
 .flash.error { background: #fde8e8; color: var(--red-dark); }
 
 /* Start */
@@ -327,3 +328,13 @@ a.small { text-decoration: none; }
 .level-pill span { font-size: .8rem; overflow-wrap: anywhere; hyphens: auto; max-width: 100%; }
 .exam-result .row { flex-wrap: wrap; }
 .exam-result .row > * { flex: 1 1 140px; }
+
+/* Kontrolllisten */
+.controls-card .reminder { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 4px 0; }
+.ctl-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 0; text-decoration: none; color: inherit; border-top: 1px solid var(--line, #eee); }
+.ctl-row:first-child { border-top: 0; }
+.ctl-list .ctl-item { display: grid; grid-template-columns: 1fr 7rem; gap: 6px 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line, #eee); }
+.ctl-list .ctl-item input[type=number] { font-size: 1.2rem; text-align: end; }
+.ctl-list .ctl-item.below { background: #fff4f2; }
+.ctl-name small { display: block; }
+.ctl-sub { grid-column: 1 / -1; font-size: .9rem; }
